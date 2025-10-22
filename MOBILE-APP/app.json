@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "Mobile",
+    "slug": "Mobile",
+    "scheme": "com.orchestratedbyhistory.eventplanner",
+    "owner": "leochavez2002",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.orchestratedbyhistory.eventplanner",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.orchestratedbyhistory.eventplanner",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.orchestratedbyhistory.eventplanner"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-asset",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ad2cb415-12fc-442c-ad81-39f87fa59cf0"
+      }
+    }
+  }
+}

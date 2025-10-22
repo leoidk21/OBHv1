@@ -1,0 +1,199 @@
+.account-container {
+    margin: 25px;
+    padding: 1rem 2rem;
+    border-radius: 15px;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.8) 0%, rgba(240, 240, 240, 0.32) 100%);
+}
+
+#editProfileModal {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: none;
+    position: fixed;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+#editProfileModal.show {
+    display: flex !important;
+}
+
+#editProfileModal .modal-content {
+    width: 400px;
+    padding: 20px;
+    height: 370px;
+    max-width: 90%;
+    max-height: 90%;
+    margin: 10% auto;
+    background: #FFF;
+    border-radius: 12px;
+    animation: fadeIn 0.3s ease-in-out;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+#editProfileModal h3 {
+    color: #333;
+    margin-top: 0;
+    font-weight: 600;
+    font-size: 1.3rem;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+#editProfileModal label {
+    color: #444;
+    display: block;
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin: 10px 0 5px;
+}
+
+#editProfileModal input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: border 0.2s;
+    border: 1px solid #CCC;
+}
+
+#editProfileModal input:focus {
+    outline: none;
+    border-color: #4a90e2;
+}
+
+#editProfileModal button {
+    border: none;
+    cursor: pointer;
+    margin-top: 15px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    padding: 10px 16px;
+    transition: background 0.2s ease-in-out;
+}
+
+#editProfileModal button[type="submit"] {
+    color: white;
+    background: #4a90e2;
+}
+
+#editProfileModal button[type="submit"]:hover {
+    background: #357ab7;
+}
+
+#editProfileModal button[type="button"] {
+    background: #ccc;
+    margin-left: 8px;
+}
+
+#editProfileModal button[type="button"]:hover {
+    background: #999;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+
+.account {
+    gap: 1rem;
+    display: flex;
+    align-items: center;
+}
+
+.profile-card {
+    margin: 25px;
+    border-radius: 15px;
+    padding: 1.2rem 2.5rem;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.8) 0%, rgba(240, 240, 240, 0.32) 100%);
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.profile-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    font-family: 'Poppins', sans-serif;
+}
+
+.edit-btn {
+    font-size: 16px;
+    font-family: 'Poppins', sans-serif;
+}
+
+.edit-btn {
+    gap: 6px;
+    border: none;
+    color: #fff;
+    display: flex;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    align-items: center;
+    background: linear-gradient(135deg, #007bff, #0056d2);
+}
+
+.edit-btn:hover {
+    background-color: #083d86;
+}
+
+.profile-content {
+    display: grid;
+    row-gap: 12px;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.profile-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-item.full {
+    grid-column: span 2;
+}
+
+.profile-item label {
+    color: #888;
+    font-size: 16px;
+    font-family: 'Poppins', sans-serif;
+}
+
+#profile-account-name {
+    font-size: 18px;
+    font-weight: 500;
+    font-family: 'Poppins', sans-serif;
+}
+
+#profile-email {
+    font-size: 18px;
+    font-weight: 500;
+    font-family: 'Poppins', sans-serif;
+}
+
+#profile-phone {
+    font-size: 18px;
+    font-weight: 500;
+    font-family: 'Poppins', sans-serif;
+}
+
+#profile-role {
+    font-size: 18px;
+    color: rgb(0, 176, 0);
+    font-family: 'Poppins', sans-serif;
+}
+

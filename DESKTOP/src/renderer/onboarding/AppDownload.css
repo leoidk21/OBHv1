@@ -1,0 +1,119 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #f7faff, #ffffff);
+}
+
+.app-download-container {
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    align-items: center;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.app-download-container::before {
+    z-index: 0;
+    top: -50px;
+    content: "";
+    width: 600px;
+    opacity: 0.4;
+    left: -200px;
+    height: 600px;
+    border-radius: 50%;
+    position: absolute;
+    background: #e0ecff;
+}
+
+.app-download-container::after {
+    z-index: 0;
+    content: "";
+    opacity: 0.4;
+    width: 600px;
+    bottom: -50px;
+    right: -200px;
+    height: 600px;
+    border-radius: 50%;
+    position: absolute;
+    background: #e0ecff;
+}
+
+.left img {
+    width: 100%;
+    display: block;
+    max-width: 350px;
+    object-fit: contain;
+}
+
+.right {
+    padding: 20px 50px;
+}
+
+.right h1 {
+    margin: 0;
+    padding: 0;
+    font-size: 4rem;
+}
+
+.right p {
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+.button-container {
+    gap: 15px;
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.btn {
+    gap: 8px;
+    display: flex;
+    font-weight: 500;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    border-radius: 8px;
+    align-items: center;
+    text-decoration: none;
+    justify-content: center;
+    transition: all 0.3s ease;
+    border: 2px solid #2c2c2c;
+}
+
+.btn.android{
+    background: #2563eb;
+    color: #fff;
+    border: none;
+}
+
+.btn.android:hover {
+    background: #1d4ed8;
+}
+
+.btn.ios {
+    color: #2c2c2c;
+    background: #fff;
+    border: 2px solid #2563eb;
+}
+
+.btn.ios:hover {
+    background: #f3f3f3;
+}
+
+.note {
+    gap: 8px;
+    color: #444;
+    display: flex;
+    margin-top: 15px;
+    font-size: 0.9rem;
+    font-style: italic;
+    align-items: center;
+}
+
+.note i {
+    font-size: 1rem;
+    color: #2563eb;
+}

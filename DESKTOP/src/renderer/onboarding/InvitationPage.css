@@ -1,0 +1,153 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(#FFF4F0, #FDF6ED, #FFF4F0);
+}
+
+p, h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+    margin: 0;
+    padding: 0;
+    overflow-wrap: break-word;
+    font-family: var(--font-family);
+}
+
+@font-face {
+    font-family: 'sarasvati';
+    src: url(/src/renderer/onboarding/assets/fonts/Sarasvati.ttf);
+}
+
+@font-face {
+    font-family: 'newIconScript';
+    src: url(/src/renderer/onboarding/assets/fonts/New\ Icon\ Script.ttf);
+}
+
+@font-face {
+    font-family: 'footlight';
+    src: url(/src/renderer/onboarding/assets/fonts/FootlightMTProLight.otf);
+}
+
+@font-face {
+    font-family: 'centuryGothic';
+    src: url(/src/renderer/onboarding/assets/fonts/centurygothic.ttf);
+}
+
+.invitation-container {
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+    align-items: center;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.invitation-container::before {
+    z-index: 0;
+    top: -50px;
+    content: "";
+    width: 600px;
+    opacity: 0.4;
+    left: -200px;
+    height: 600px;
+    border-radius: 50%;
+    position: absolute;
+    background: #FEF3E2;
+}
+
+.invitation-container::after {
+    z-index: 0;
+    bottom: -50px;
+    content: "";
+    width: 600px;
+    opacity: 0.4;
+    right: -200px;
+    height: 600px;
+    border-radius: 50%;
+    position: absolute;
+    background: #FEF3E2;
+}
+
+.invitation-content {
+    text-align: center;
+}
+
+.invitation-content h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    font-weight: normal;
+    font-family: 'sarasvati';
+}
+
+.invitation-title {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    font-weight: normal;
+    letter-spacing: 0.1rem;
+    font-family: 'sarasvati';
+}
+
+.line {
+    height: 2px;
+    width: 100px;
+    margin: -3px auto;
+    margin-bottom: 1rem;
+    background-color: #B47D4C;
+}
+
+.invitation-content h2 {
+    font-size: 5rem;
+    color: #B47D4C;
+    padding-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: normal;
+    font-family: 'newIconScript';
+}
+
+.invitation-date {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: normal;
+    font-family: 'footlight';
+}
+
+.invitation-message {
+    margin-bottom: 1rem;
+    font-weight: normal;
+    font-family: 'centuryGothic';
+}
+
+.button-container {
+    gap: 15px;
+    display: flex;
+    margin-top: 20px;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn {
+    gap: 8px;
+    border: none;
+    width: 150px;
+    display: flex;
+    cursor: pointer;
+    font-weight: 500;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    border-radius: 5px;
+    align-items: center;
+    text-decoration: none;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.btn.going{
+    color: #fff;
+    box-shadow: rgba(0, 0, 0, 0.05) 0px 6px 24px 0px, rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
+    background: linear-gradient(135deg, #DA9D61, #F9DCA4);
+}
+
+.btn.decline {
+    box-shadow: rgba(0, 0, 0, 0.05) 0px 6px 24px 0px, rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
+    background: linear-gradient(180deg, #FEF3E2, #F9DCA4);
+}

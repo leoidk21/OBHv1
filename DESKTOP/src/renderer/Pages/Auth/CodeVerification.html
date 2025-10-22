@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verification Code Page</title>
+        <link rel="stylesheet" href="../Auth/ForgotPassword.css">
+        <link rel="stylesheet" href="../../components/Sidebar.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    </head>
+    <body>
+        <main class="admin-container">
+            <div class="admin">
+                <div class="brand-logo">
+                    <img src="../../assets/OBH-FULL-LOGO.png" alt="OBH Full Logo">
+                </div>
+                
+                <div class="login-container">
+                    <div class="login-form" method="post" action="/login">
+                        <div class="admin-icon">
+                            <i class="fa-solid fa-lock"></i>
+                            <h2 class="login">Enter Verification Code</h2>
+                            <p class="instructions">Check your email and enter the code.</p>
+                        </div>
+                        
+                        <div class="form-group-container">
+                            <form id="verifyForm">
+                                <div class="form-group">
+                                    <input 
+                                        class="input-field"
+                                        type="text" 
+                                        id="verificationCode" 
+                                        name="verificationCode" 
+                                        placeholder="Enter the 4-digit code" 
+                                        required 
+                                        inputmode="numeric" 
+                                        pattern="[0-9]{4}" 
+                                        minlength="4" 
+                                        maxlength="4"
+                                    >
+                                </div>
+                            
+                                <button type="submit" class="submit-btn">Verify Code</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="create-account">
+                        <p>Go back to <a href="../Auth/ForgotPassword.html">Forgot Password</a></p>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <script>
+            document.getElementById("verifyForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = localStorage.getItem("resetEmail");
+            const code = document.getElementById("verificationCode").value;
+
+            const res = await fetch("http://localhost:3000/api/auth/verify-code", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, code })
+            });
+
+            const data = await res.json();
+                if (res.ok) {
+                    alert("Code verified!");
+                    localStorage.setItem("resetCode", code);
+                    window.location.href = "../Auth/ResetPassword.html";
+                } else {
+                    alert(data.error || "Invalid code");
+                }
+            });
+        </script>
+    </body>
+</html>
