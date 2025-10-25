@@ -78,12 +78,13 @@ const ResetPass = () => {
               }}
               resizeMode='contain'
             />
-            <Text style={[{ fontSize: wp('5.5%'), marginTop: hp('2.5%') }]}>Reset Password</Text>
+            <Text style={[{ fontSize: wp('5.5%'), marginTop: hp('2.5%'), fontFamily: "Poppins" }]}>Reset Password</Text>
           </View>
 
           <View style={styles.formContainer}>
             <TextInput
-              placeholder='New Password' 
+              placeholder='New Password'
+              placeholderTextColor="#999"
               value={newPassword}
               onChangeText={setNewPassword}
               style={styles.textInput}
@@ -105,7 +106,7 @@ const ResetPass = () => {
           </View>
 
           <View style={styles.noteText}>
-            <Text style={{ textAlign: 'center' }}>
+            <Text style={{ textAlign: 'center', fontFamily: "Poppins" }}>
               Kindly remember and save your password.
             </Text>
           </View>
@@ -144,22 +145,26 @@ const styles = StyleSheet.create({
   textInput: {
     borderWidth: 1,
     width: wp('80%'),
-    borderRadius: wp('50%'),
+    fontSize: wp('4%'),
+    borderRadius: wp('10%'),
     borderColor: colors.border,
-    backgroundColor: colors.white,
     paddingHorizontal: wp('5%'),
-    paddingVertical: hp('1.6%'),
+    paddingVertical: wp("3%"),
+    backgroundColor: colors.white,
   },
 
   submitBtn: {
     width: wp('80%'),
+    fontSize: wp('4%'),
+    marginTop: hp('0.7%'),
     borderRadius: wp('50%'),
-    backgroundColor: colors.button,
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('1.6%'),
+    backgroundColor: colors.button,
   },
 
   submitText: {
+    fontFamily: "Poppins",
     textAlign: 'center',
     color: colors.white,
   },

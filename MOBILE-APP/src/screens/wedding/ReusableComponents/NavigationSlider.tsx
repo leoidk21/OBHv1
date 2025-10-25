@@ -8,8 +8,8 @@ import { RootStackParamList } from "../../../screens/type";
 import colors from "../../config/colors";
 import { NavigationProp, useNavigation, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useNotifications } from '../../../context/NotificationContext';
 
-// ICONS
 import { HomeIcon } from "../../icons/HomeIcon";
 import { EventIcon } from "../../icons/EventIcon";
 import { ScheduleIcon } from "../../icons/ScheduleIcon";
@@ -22,6 +22,7 @@ import { getUserData } from "../../auth/user-auth";
 
 const NavigationSlider: React.FC<{ headerTitle?: string }> = ({ headerTitle }) => {
   const [user, setUser] = useState<any>(null);
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     loadUserData();
@@ -157,16 +158,29 @@ const NavigationSlider: React.FC<{ headerTitle?: string }> = ({ headerTitle }) =
         </View>
 
         <View style={styles.notifAccountContainer} >
+          <TouchableOpacity   
+            style={styles.notifIconContainer}
+            onPress={() => navigation.navigate('Notification' as never)}
+          >
             <Image
               resizeMode="contain"
               style={styles.notifAccPng}
               source={require("../../../assets/notif.png")}
             />
-            <Image
-              resizeMode="contain"
-              style={styles.notifAccPng}
-              source={require("../../../assets/account.png")}
-            />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <Image
+            resizeMode="contain"
+            style={styles.notifAccPng}
+            source={require("../../../assets/account.png")}
+          />
         </View>
       </View>
       {/* HEADER */}
@@ -441,11 +455,34 @@ const styles = StyleSheet.create({
         fontFamily: "Loviena",
     },
 
+    notifIconContainer: {
+      position: 'relative',
+    },
+
     profileEmail: {
         top: hp("0.5%"),
         width: wp("45%"),
         fontSize: wp("3.2%"),
         fontFamily: "Poppins",
+    },
+
+    badge: {
+        position: 'absolute',
+        top: -5,
+        right: -5,
+        backgroundColor: '#FF3B30',
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+
+    badgeText: {
+      color: 'white',
+      fontSize: 10,
+      fontWeight: 'bold',
     },
 });
 

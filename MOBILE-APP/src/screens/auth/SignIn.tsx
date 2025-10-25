@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Alert } from 'react-native';
+import { useFonts } from 'expo-font';
 
 import * as SecureStore from 'expo-secure-store';
 import { login } from '../auth/user-auth';
@@ -14,6 +15,14 @@ import { useEvent } from '../../context/EventContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SignIn = () => {
+  const [fontsLoaded] = useFonts({
+      'Poppins': require('../../assets/fonts/Poppins-Regular.ttf'),
+      'Loviena': require('../../assets/fonts/lovienapersonaluseonlyregular-yy4pq.ttf'),
+      'Canela': require('../../assets/fonts/CanelaCondensed-Regular-Trial.otf'),
+      'Senbatsu': require('../../assets/fonts/Senbatsu.otf'),
+      'Velista': require('../../assets/fonts/VELISTA.ttf'),
+  });
+
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const emailRef = useRef<TextInput>(null);
@@ -124,25 +133,14 @@ const SignIn = () => {
               }} 
               resizeMode='contain'
             />
-            <Text style={[styles.topText, { fontSize: wp('5.5%') }]}>Login</Text>
+            <Text style={[styles.topText, { fontSize: wp('5.5%'), fontFamily: 'Poppins', width: wp("100%"), textAlign: 'center' }]}>Sign In</Text>
           </View>
-
-          {/* <View>
-            <TouchableOpacity onPress={debugCurrentStorage}>
-              <Text>Check Storage</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View>
-            <TouchableOpacity onPress={checkAllUsers}>
-              <Text>Check DWADADAW</Text>
-            </TouchableOpacity>
-          </View> */}
 
           <View style={styles.formContainer}>
             <TextInput
               ref={emailRef}
               placeholder='Email' 
+              placeholderTextColor="#999"
               value={email}
               onChangeText={setEmail} 
               keyboardType="email-address"
@@ -163,7 +161,8 @@ const SignIn = () => {
 
             <TextInput
               ref={passwordRef}
-              placeholder='Password' 
+              placeholder='Password'
+              placeholderTextColor="#999"
               value={password}
               onChangeText={setPassword} 
               secureTextEntry={true}
@@ -195,7 +194,7 @@ const SignIn = () => {
               onPress={() => navigation.navigate('ForgotPass')}
               disabled={!!loading}
             >
-              <Text style={{ color: loading ? '#999' : '#000' }}>
+              <Text style={{ color: loading ? '#999' : '#000', fontFamily: "Poppins", width: wp("100%"), textAlign: 'center' }}>
                 Forgot Password?
               </Text>
             </TouchableOpacity>
@@ -238,13 +237,14 @@ const styles = StyleSheet.create({
   },
 
   textInput: {
+    color: '#000000',
     borderWidth: 1,
     width: wp('80%'),
     fontSize: wp('4%'),
     borderRadius: wp('10%'),
     borderColor: colors.border,
     paddingHorizontal: wp('5%'),
-    paddingVertical: hp('1.6%'),
+    paddingVertical: wp("3%"),
     backgroundColor: colors.white,
   },
 
@@ -272,9 +272,12 @@ const styles = StyleSheet.create({
     fontSize: wp('3.5%'),
     textAlign: 'center',
     color: colors.white,
+    fontFamily: "Poppins"
   },
 
-  topText: {},
+  topText: {
+    fontFamily: "Poppins"
+  },
 
   loginContainer: {
     bottom: hp('3%'),
@@ -292,129 +295,3 @@ const styles = StyleSheet.create({
 });
 
 export default SignIn;
-  // import * as Linking from 'expo-linking';
-  // import * as AuthSession from 'expo-auth-session';
-  // import * as Google from 'expo-auth-session/providers/google';
-  // import * as WebBrowser from 'expo-web-browser';
-  // import { GOOGLE_WEB_CLIENT_ID } from '@env';
-  // WebBrowser.maybeCompleteAuthSession();
-
-  // const [googleLoading, setGoogleLoading] = useState(false);
-
-  // const handleGoogleSignIn = async () => {
-  //   try {
-  //     setGoogleLoading(true);
-  //     console.log('🚀 Starting manual Google OAuth...');
-
-  //     const redirectUri = 'https://auth.expo.io/@leochavez2002/Mobile';
-  //     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-  //       `client_id=${GOOGLE_WEB_CLIENT_ID}` +
-  //       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-  //       `&response_type=id_token` +
-  //       `&scope=${encodeURIComponent('openid profile email')}` +
-  //       `&nonce=${Math.random().toString(36)}`;
-
-  //     console.log('🔗 Auth URL:', authUrl);
-
-  //     const result = await WebBrowser.openAuthSessionAsync(
-  //       authUrl,
-  //       redirectUri
-  //     );
-
-  //     console.log('📥 Result:', result);
-
-  //     if (result.type === 'success') {
-  //       const url = result.url;
-  //       console.log('✅ Success URL:', url);
-        
-  //       // Extract id_token from URL fragment
-  //       const idToken = extractIdToken(url);
-        
-  //       if (idToken) {
-  //         console.log('✅ ID token extracted');
-  //         await sendToBackend({ idToken });
-  //       } else {
-  //         console.error('❌ No ID token in URL');
-  //         Alert.alert('Error', 'No authentication token received');
-  //         setGoogleLoading(false);
-  //       }
-  //     } else {
-  //       console.log('❌ Auth cancelled or failed');
-  //       setGoogleLoading(false);
-  //     }
-  //   } catch (error) {
-  //     console.error('❌ Auth error:', error);
-  //     Alert.alert('Error', 'Failed to sign in with Google');
-  //     setGoogleLoading(false);
-  //   }
-  // };
-
-  // const extractIdToken = (url: string): string | null => {
-  //   try {
-  //     // Extract fragment (everything after #)
-  //     const fragment = url.split('#')[1];
-  //     if (!fragment) return null;
-
-  //     // Parse fragment parameters
-  //     const params = new URLSearchParams(fragment);
-  //     return params.get('id_token');
-  //   } catch (error) {
-  //     console.error('Error extracting token:', error);
-  //     return null;
-  //   }
-  // };
-
-  // const sendToBackend = async (authData: any) => {
-  //   try {
-  //     console.log('🔄 Sending to backend...');
-      
-  //     const response = await fetch('http://192.168.1.7:3000/api/auth/google', {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: JSON.stringify(authData),
-  //     });
-
-  //     const data = await response.json();
-  //     console.log('✅ Backend response:', data);
-
-  //     if (data.ok) {
-  //       Alert.alert('Success! 🎉', `Welcome ${data.user?.first_name || data.user?.email}!`);
-  //       // TODO: Store token and navigate
-  //     } else {
-  //       Alert.alert('Login Failed', data.error || 'Unknown server error');
-  //     }
-  //   } catch (error) {
-  //     console.error('❌ Backend error:', error);
-  //     Alert.alert('Connection Error', 'Could not connect to server');
-  //   } finally {
-  //     setGoogleLoading(false);
-  //   }
-  // };
-
-{/* <View style={styles.divider}>
-  <View style={styles.dividerLine} />
-  <Text style={styles.dividerText}>OR</Text>
-  <View style={styles.dividerLine} />
-</View>
-
-  <View style={styles.continueContainer}>
-  <TouchableOpacity 
-    style={styles.googleBtn}
-    onPress={handleGoogleSignIn}
-    disabled={googleLoading}
-  >
-    <Image
-      source={require('../../assets/google.png')}
-      style={{
-        width: wp('6%'),
-        height: wp('6%'),
-      }}
-      resizeMode='contain'
-    />
-    <Text style={styles.googleText}>
-      {googleLoading ? 'Signing in...' : 'Sign in with Google'}
-    </Text>
-  </TouchableOpacity>
-</View> */}

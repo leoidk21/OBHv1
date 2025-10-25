@@ -22,6 +22,7 @@
     "@react-navigation/drawer": "^7.5.7",
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/native-stack": "^7.3.21",
+    "@supabase/supabase-js": "^2.76.1",
     "axios": "^1.12.2",
     "expo": "54.0.17",
     "expo-asset": "~12.0.8",
@@ -58,7 +59,8 @@
     "react-native-svg": "15.12.1",
     "react-native-system-navigation-bar": "^2.6.4",
     "react-native-vector-icons": "^10.2.0",
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.5.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

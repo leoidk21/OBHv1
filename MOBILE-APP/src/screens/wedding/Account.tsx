@@ -315,7 +315,7 @@ const navigation: NavigationProp<ParamListBase> = useNavigation();
                           </Svg>
                           <View>
                               <Text style={styles.infoTitle}>Event</Text>
-                              <Text>
+                              <Text style={{ fontFamily: "Poppins" }}>
                                  {eventData.wedding_type}
                               </Text>
                           </View>
@@ -353,7 +353,7 @@ const navigation: NavigationProp<ParamListBase> = useNavigation();
                           </Svg>
                           <View>
                               <Text style={styles.infoTitle}>When</Text>
-                              <Text>{formatEventDate(eventData.event_date)}</Text>
+                              <Text style={{ fontFamily: "Poppins" }}>{formatEventDate(eventData.event_date)}</Text>
                           </View>
                       </View>
                       <View>
@@ -390,7 +390,7 @@ const navigation: NavigationProp<ParamListBase> = useNavigation();
                           </Svg>
                           <View>
                               <Text style={styles.infoTitle}>Package</Text>
-                              <Text>{eventData.guest_range} Pax</Text>
+                              <Text style={{ fontFamily: "Poppins" }}>{eventData.guest_range} Pax</Text>
                           </View>
                       </View>
                       <View>
@@ -426,7 +426,7 @@ const navigation: NavigationProp<ParamListBase> = useNavigation();
                           </Svg>
                           <View>
                               <Text style={styles.infoTitle}>Price</Text>
-                              <Text>{eventData.package_price}</Text>
+                              <Text style={{ fontFamily: "Poppins" }}>{eventData.package_price}</Text>
                           </View>
                       </View>
                       <View>
@@ -550,6 +550,7 @@ const styles = StyleSheet.create({
     fontSize: wp('4%'),
     color: colors.borderv5,
     marginBottom: hp('1.5%'),
+    fontFamily: "Poppins",
   },
 
   infoRowContainer: {
@@ -565,6 +566,7 @@ const styles = StyleSheet.create({
   },
 
   infoTitle: {
+    fontFamily: "Poppins",
     color: colors.borderv5,
   },
 
@@ -616,8 +618,8 @@ formContainer: {
 
 formLabel: {
   fontSize: 16,
-  marginBottom: 5,
   marginTop: 10,
+  fontFamily: "Poppins"
 },
 
 formInput: {
@@ -628,6 +630,7 @@ formInput: {
   paddingHorizontal: 16,
   paddingVertical: 12,
   fontSize: 16,
+  fontFamily: "Poppins",
   backgroundColor: '#ffffff',
   color: '#212529',
 },
@@ -638,7 +641,7 @@ saveButton: {
   borderRadius: 10,
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: '#1971c2',
+  backgroundColor: colors.button,
   shadowColor: '#000',
   shadowOffset: {
     width: 0,

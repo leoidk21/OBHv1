@@ -1,11 +1,231 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const pool = require('../db');
 const { authenticateToken: verifMobileAuth, authenticateToken } = require('./middleware/mobile-auth');
+const { createClient } = require('@supabase/supabase-js');
+
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
+console.log("🧩 SUPABASE_URL:", process.env.SUPABASE_URL);
+console.log("🧩 SUPABASE_ANON_KEY:", process.env.SUPABASE_ANON_KEY ? "LOADED" : "MISSING");
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 const router = express.Router();
 
-const fs = require('fs');
-const path = require('path');
+router.post('/cancel', verifMobileAuth, async (req, res) => {
+    try {
+        const { eventId, reason } = req.body;
+        const userId = req.user.id;
+        
+        console.log('❌ Event cancellation request:', { eventId, userId, reason });
 
+        // First check the current status and valid statuses
+        const checkResult = await pool.query(
+            `SELECT status FROM event_plans WHERE id = $1 AND user_id = $2`,
+            [eventId, userId]
+        );
+
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ error: "Event not found or you don't have permission to cancel this event" });
+        }
+
+        const currentStatus = checkResult.rows[0].status;
+        console.log('📋 Current event status:', currentStatus);
+
+        // Update event status to 'Rejected' instead of 'Cancelled' since that's a valid status
+        // Or you can use 'Completed' if that makes more sense for your business logic
+        const result = await pool.query(
+            `UPDATE event_plans SET status = 'Rejected', remarks = $1 WHERE id = $2 AND user_id = $3 RETURNING *`,
+            [reason, eventId, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Event not found or you don't have permission to cancel this event" });
+        }
+
+        console.log('✅ Event cancelled successfully. Status changed to:', result.rows[0].status);
+
+        // Send notification to all admins
+        await sendCancellationNotificationToAdmins(userId, eventId, reason);
+
+        res.json({ 
+            success: true, 
+            message: "Event cancelled successfully",
+            newStatus: 'Rejected'
+        });
+    } catch (err) {
+        console.error("Cancel event error:", err);
+        res.status(500).json({ error: "Failed to cancel event" });
+    }
+});
+
+// Notification to all admins
+// Notification to all admins
+const sendCancellationNotificationToAdmins = async (userId, eventId, reason) => {
+    try {
+        // Get all admin user IDs
+        const adminResult = await pool.query(
+            `SELECT id FROM admins WHERE status = 'approved'`
+        );
+
+        const adminIds = adminResult.rows.map(admin => admin.id);
+        console.log('📢 Sending cancellation notifications to admins:', adminIds);
+
+        // Create notifications for each admin
+        const notifications = adminIds.map(adminId => ({
+            user_id: adminId,
+            type: 'EVENT_CANCELLATION',
+            title: 'Event Cancelled',
+            message: `User ${userId} cancelled event ${eventId}. Reason: ${reason}`,
+            data: { 
+                userId: userId, 
+                eventId: eventId, 
+                reason: reason,
+                timestamp: new Date().toISOString()
+            },
+            is_read: false,
+            created_at: new Date().toISOString()
+        }));
+
+        // Insert all notifications
+        const { data, error } = await supabase
+            .from('notifications')
+            .insert(notifications);
+
+        if (error) {
+            console.error('❌ Admin notification error:', error);
+            
+            // If UUID fails, try with admin user IDs as strings
+            console.log('🔄 Retrying with string user IDs...');
+            const stringNotifications = adminIds.map(adminId => ({
+                user_id: String(adminId), // Convert to string
+                type: 'EVENT_CANCELLATION',
+                title: 'Event Cancelled',
+                message: `User ${userId} cancelled event ${eventId}. Reason: ${reason}`,
+                data: { 
+                    userId: userId, 
+                    eventId: eventId, 
+                    reason: reason,
+                    timestamp: new Date().toISOString()
+                },
+                is_read: false,
+                created_at: new Date().toISOString()
+            }));
+
+            const { data: retryData, error: retryError } = await supabase
+                .from('notifications')
+                .insert(stringNotifications);
+
+            if (retryError) {
+                console.error('❌ Second attempt failed:', retryError);
+            } else {
+                console.log(`✅ Notifications sent to ${adminIds.length} admins (string IDs)`);
+            }
+        } else {
+            console.log(`✅ Notifications sent to ${adminIds.length} admins`);
+        }
+    } catch (error) {
+        console.error('❌ Error sending admin notifications:', error);
+    }
+};
+
+// ================ //
+// SEND REMINDER END POINTS
+// ================ //
+router.post('/send-reminder', authenticateToken, async (req, res) => {
+  try {
+    const { eventId, clientName, gcashName, gcashNumber, dueDate, notes } = req.body;
+    
+    // Get user_id from event
+    const eventResult = await pool.query(
+      `SELECT user_id FROM event_plans WHERE id = $1`,
+      [eventId]
+    );
+
+    if (eventResult.rows.length === 0) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    const userId = eventResult.rows[0].user_id;
+
+    // Store reminder
+    const result = await pool.query(
+      `INSERT INTO payment_reminders (event_id, client_name, gcash_name, gcash_number, due_date, notes, sent_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
+      [eventId, clientName, gcashName, gcashNumber, dueDate, notes]
+    );
+
+    // Send notification
+    await sendPaymentReminderNotification(userId, eventId, clientName, dueDate, gcashName, gcashNumber, notes);
+
+    res.json({ 
+      success: true, 
+      message: "Reminder sent successfully"
+    });
+    
+  } catch (err) {
+    console.error("Send reminder error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// ================= //
+// PAYMENT REMINDER NOTIFICATION FUNCTION
+// ================= //
+const sendPaymentReminderNotification = async (userId, eventId, clientName, dueDate, gcashName, gcashNumber, notes = '') => {
+  try {
+    console.log('💰 Sending payment reminder to user:', userId);
+    
+    const formattedDueDate = new Date(dueDate).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const message = `Payment reminder for ${clientName}. Due date: ${formattedDueDate}`;
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert([
+        {
+          user_id: userId,
+          type: 'PAYMENT_REMINDER',
+          title: 'Payment Reminder',
+          message: message,
+          data: {
+            eventId: eventId,
+            clientName: clientName,
+            dueDate: dueDate,
+            formattedDueDate: formattedDueDate,
+            gcashName: gcashName,
+            gcashNumber: gcashNumber,
+            notes: notes
+          },
+          is_read: false,
+          created_at: new Date().toISOString()
+        }
+      ]);
+
+    if (error) {
+      console.error('❌ Payment reminder insert error:', error);
+      return false;
+    }
+
+    console.log('✅ Payment reminder notification sent to user:', userId);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Error in sendPaymentReminderNotification:', error);
+    return false;
+  }
+};
+
+// ================ //
+// FILE UPLOAD
+// ================ //
 router.post('/upload-proof-base64', verifMobileAuth, async (req, res) => {
   try {
     const { expenseId, eventId, imageData } = req.body;
@@ -77,7 +297,9 @@ router.post('/upload-proof-base64', verifMobileAuth, async (req, res) => {
   }
 });
 
-// FIXED: GET /event-plans/status - Correct parameter handling
+// ================ //
+// EVENT PLANS STATUS
+// ================ //
 router.get('/status', verifMobileAuth, async (req, res) => {
     const numericUserId = parseInt(req.user.id);
     const result = await pool.query(`
@@ -90,7 +312,9 @@ router.get('/status', verifMobileAuth, async (req, res) => {
     res.json({ status: result.rows[0]?.status || 'Pending' });
 });
 
-// POST /submit - Create a new event plan
+// ================ //
+// CREATE A NEW EVENT
+// ================ //
 router.post('/submit', verifMobileAuth, async (req, res) => {
     try {
         const {
@@ -133,6 +357,13 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
             fs.writeFileSync(filePath, buffer);
             e_signature_data = `/uploads/signatures/${fileName}`;
         }
+
+        const existingEvent = await pool.query(
+            `SELECT id, client_name, event_type
+            FROM event_plans
+            WHERE event_date = $1 AND status IN ('Pending', 'Approved')`,
+                [event_date]
+        );
 
         // In event-plans.js - FIX THE INSERT QUERY
         const result = await pool.query(
@@ -185,7 +416,28 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
     }
 });
 
-// GET /event-plans - Retrieve all event plans (FOR ADMIN DASHBOARD)
+// ================ //
+// AVAILABILITY OF DATES
+// ================ //
+router.get('/availability', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT event_date
+      FROM event_plans
+      WHERE status IN ('Pending', 'Approved')
+    `);
+
+    const bookedDates = result.rows.map(r => r.event_date);
+    res.json({ success: true, bookedDates });
+  } catch (error) {
+    console.error('Error fetching booked dates:', error);
+    res.status(500).json({ error: 'Server error while fetching booked dates' });
+  }
+});
+
+// ================ //
+// RETRIEVE ALL EVENT PLANS
+// ================ //
 router.get('/', verifMobileAuth, async (req, res) => {
     try {
         console.log('Fetching all event plans for user:', req.user.id);
@@ -205,7 +457,9 @@ router.get('/', verifMobileAuth, async (req, res) => {
     }
 });
 
-// Get reminders for mobile app
+// ================ //
+// REMINDERS FOR PAYMENT
+// ================ //
 router.get('/payment-reminders', verifMobileAuth, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -229,7 +483,9 @@ router.get('/payment-reminders', verifMobileAuth, async (req, res) => {
   }
 });
 
-// GET /event-plans/:id - Get single event plan
+// ================ //
+// GET A SINGLE EVENT PLAN
+// ================ //
 router.get('/:id', verifMobileAuth, async (req, res) => {
     try {
         const { id } = req.params;
@@ -253,7 +509,9 @@ router.get('/:id', verifMobileAuth, async (req, res) => {
     }
 });
 
-// DELETE /event-plans/:id - Delete event plan
+// ================ //
+// DELETE AN EVENT
+// ================ //
 router.delete('/:id', verifMobileAuth, async (req, res) => {
     const client = await pool.connect();
     try {
@@ -287,7 +545,9 @@ router.delete('/:id', verifMobileAuth, async (req, res) => {
     }
 });
 
-// PUT /event-plans/:id/status - Update event status (SIMPLIFIED)
+// ================ //
+// UPDATE EVENT STATUS
+// ================ //
 router.put('/:id/status', async (req, res) => {
     try {
         const { id } = req.params;
@@ -320,9 +580,9 @@ router.put('/:id/status', async (req, res) => {
 });
 
 // ======= APPROVED EVENTS DETAILS FETCH HERE ======= //
-/*
-// SCHEDULE PAGE
-*/
+// ================ //
+// SCHEDULE
+// ================ //
 router.get('/approved/schedule', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query(
@@ -346,7 +606,9 @@ router.get('/approved/schedule', authenticateToken, async (req, res) => {
     }
 });
 
-// Get approved events for dropdown (names only)
+// ================ //
+// GET APPROVED GUESTS
+// ================ //
 router.get('/approved/guests', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query(
@@ -367,7 +629,9 @@ router.get('/approved/guests', authenticateToken, async (req, res) => {
     }
 });
 
-// Get guests for specific approved event
+// ================ //
+// GET GUESTS LIST
+// ================ //
 router.get('/approved/events/guests/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
@@ -401,7 +665,9 @@ router.get('/approved/events/guests/:id', authenticateToken, async (req, res) =>
     }
 });
 
-// Get approved events with budget information
+// ================ //
+// GET APPROVED EVENTS
+// ================ //
 router.get('/approved/budget', authenticateToken, async (req, res) => {
         try {
         const result = await pool.query(
@@ -441,7 +707,9 @@ router.get('/approved/budget', authenticateToken, async (req, res) => {
     }
 });
 
-// Get approved events for clients page WITH email from mobile_users
+// ================ //
+// GET APPROVED CLIENTS
+// ================ //
 router.get('/approved/clients', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query(
@@ -472,32 +740,5 @@ router.get('/approved/clients', authenticateToken, async (req, res) => {
     }
 });
 
-// Send reminder endpoint
-router.post('/send-reminder', authenticateToken, async (req, res) => {
-  console.log("🔔 Send-reminder route hit! Body:", req.body);
 
-  try {
-    const { eventId, clientName, gcashName, gcashNumber, dueDate, notes } = req.body;
-    
-    console.log("Sending reminder for event:", eventId);
-    
-    // Store reminder in database
-    const result = await pool.query(
-      `INSERT INTO payment_reminders
-       (event_id, client_name, gcash_name, gcash_number, due_date, notes, sent_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       RETURNING *`,
-      [eventId, clientName, gcashName, gcashNumber, dueDate, notes]
-    );
-
-    res.json({ 
-      success: true, 
-      message: "Reminder sent successfully",
-      reminder: result.rows[0]
-    });
-  } catch (err) {
-    console.error("❌ Send reminder error:", err);
-    res.status(500).json({ error: "Failed to send reminder" });
-  }
-});
 module.exports = router;

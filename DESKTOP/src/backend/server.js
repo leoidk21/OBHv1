@@ -2,46 +2,110 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const dotenv = require("dotenv");
-const pool = require("./db");
-const bodyParser = require('body-parser');
+require('dotenv').config();
 
-dotenv.config({ path: path.join(__dirname, ".env") });
+// LOAD ENVIRONMENT VARIABLES FIRST - before ANY other imports
+const envPath = path.join(__dirname, "../.env");
+console.log("📁 Loading .env from:", envPath);
+dotenv.config({ path: envPath });
+
+// DEBUG: Check if env vars are loaded
+console.log("🔧 Environment check in server.js:");
+console.log("DB_USER:", process.env.DB_USER || "UNDEFINED");
+console.log("EMAIL_USER:", process.env.EMAIL_USER || "UNDEFINED");
+
+// NOW import other modules that depend on process.env
+const bodyParser = require('body-parser');
+const http = require('http');
+const { Server } = require('socket.io');
+
+// Import pool AFTER environment variables are loaded
+const pool = require("./db");
+
 console.log("🚀 Server starting...");
 
 const app = express();
-
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 app.use(cors());
-
 app.use(express.json({ 
     limit: '10mb',
     verify: (req, res, buf) => {
         req.rawBody = buf;
     }
 }));
-
 app.use(express.urlencoded({ 
     limit: '10mb', 
     extended: true 
 }));
-
 app.use(bodyParser.json({ limit: '10mb' }));
 
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  if (req.headers.authorization) {
-    console.log("Has Authorization header");
-  }
-  next();
+// Make io accessible to routes
+app.set('io', io);
+
+// Store connected users
+const connectedUsers = new Map();
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  // User joins their own room (using user ID)
+  socket.on('join-user-room', (userId, callback) => {
+    if (!userId) {
+      console.log('❌ No userId provided for join-user-room');
+      if (callback) callback({ success: false, error: 'No userId provided' });
+      return;
+    }
+    
+    socket.join(`user-${userId}`);
+    connectedUsers.set(userId, socket.id);
+    console.log(`✅ User ${userId} joined room user-${userId}`);
+    
+    if (callback) callback({ success: true, room: `user-${userId}` });
+  });
+
+  // Admin joins admin room
+  socket.on('join-admin-room', (adminId, callback) => {
+    socket.join(`admin-${adminId}`);
+    console.log(`Admin ${adminId} joined room`);
+    if (callback) callback({ success: true, room: `admin-${adminId}` });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+    // Remove from connected users
+    for (let [userId, socketId] of connectedUsers.entries()) {
+      if (socketId === socket.id) {
+        connectedUsers.delete(userId);
+        console.log(`🗑️ Removed user ${userId} from connected users`);
+        break;
+      }
+    }
+  });
+
+  // Debug: log all events
+  socket.onAny((eventName, ...args) => {
+    console.log(`🔍 Server socket event: ${eventName}`, args);
+  });
 });
 
+// Your existing routes
 app.use("/api/auth", require("./routes/regularAdminAuth"));
 app.use("/api/admin", require("./routes/regularAdminLogs"));
 app.use("/api/superadmin", require("./routes/superAdminLogs"));
 app.use("/api", require("./routes/mobile-users"));
 app.use("/api/event-plans", require("./routes/event-plan"));
 app.use("/api/admin/event-plans", require("./routes/event-auth"));
+app.use("/api/admin/notifications", require('./routes/notifications'));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Your existing routes continue...
 app.get("/api/test", (req, res) => {
   console.log("TEST: Basic API test");
   res.json({ message: "Basic test works!", timestamp: new Date().toISOString() });
@@ -78,10 +142,12 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
+// Change from app.listen to server.listen
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server started successfully!`);
   console.log(`🚀 Local:   http://localhost:${PORT}`);
   console.log(`🚀 Network: http://192.168.1.7:${PORT}`);
+  console.log(`🚀 Socket.io running on port ${PORT}`);
 });
 
 pool.query("SELECT NOW()", (err, res) => {

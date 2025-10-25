@@ -1,20 +1,27 @@
 const { Pool } = require('pg');
-require('dotenv').config();
+
+console.log('🔧 Debug - Environment variables in db.js:');
+console.log('DB_USER:', process.env.DB_USER || 'UNDEFINED');
+console.log('DB_HOST:', process.env.DB_HOST || 'UNDEFINED');
+console.log('DB_NAME:', process.env.DB_NAME || 'UNDEFINED');
+console.log('DB_PORT:', process.env.DB_PORT || 'UNDEFINED');
+console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : 'MISSING');
 
 const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'postgres',
-  password: process.env.DB_PASSWORD || 'Admin',
-  port: process.env.DB_PORT || 5432,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
+  ssl: { rejectUnauthorized: false }
 });
 
-// Test database connection
+// Test connection
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error('Database connection error:', err);
+    console.error('❌ Database connection failed:', err.message);
   } else {
-    console.log('Database connected successfully:', res.rows[0]);
+    console.log('✅ Connected to Supabase Session Pooler at:', res.rows[0].now);
   }
 });
 

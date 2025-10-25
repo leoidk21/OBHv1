@@ -14,7 +14,7 @@ import { forgotPassword } from '../auth/user-auth';
 
 const SignUp = () => {
   const [email, setEmail] = useState('');
-  const forgotText = "Enter the email address linked to your account and we'll send you a code to reset your password.";
+  const forgotText = "Enter your account email and we’ll send a reset code.";
   const navigation: NavigationProp<ParamListBase> = useNavigation();
 
   const handleForgotPassword = async () => {
@@ -56,13 +56,14 @@ const SignUp = () => {
               }} 
               resizeMode='contain'
             />
-            <Text style={[{ fontSize: wp('5.5%'), marginTop: hp('2.5%') }]}>Forgot Password?</Text>
-            <Text style={[{ fontSize: wp('3.5%'), marginTop: hp('1%'), textAlign: 'center', paddingHorizontal: wp('10%')}]}>{forgotText}</Text>
+            <Text style={[{ fontSize: wp('5.5%'), marginTop: hp('2.5%'), fontFamily: 'Poppins' }]}>Forgot Password?</Text>
+            <Text style={[{ fontSize: wp('3.5%'), marginTop: hp('1%'), textAlign: 'center', paddingHorizontal: wp('10%'), fontFamily: 'Poppins'}]}>{forgotText}</Text>
           </View>
 
           <View style={styles.formContainer}>
             <TextInput
-              placeholder='Enter your email address' 
+              placeholder='Enter your email address'
+              placeholderTextColor="#999"
               value={email}
               onChangeText={(text) => setEmail(text)}           
               style={styles.textInput}
@@ -76,8 +77,8 @@ const SignUp = () => {
           </View>
 
           <View style={styles.noteText}>
-            <Text style={{textAlign: 'center'}}>
-              If you don't get the code within a few minutes, please try again.
+            <Text style={{textAlign: 'center', fontFamily: "Poppins" }}>
+              Code not received? Try again in a few minutes.
             </Text>
           </View>
         </LinearGradient>
@@ -116,24 +117,28 @@ const styles = StyleSheet.create({
   textInput: {
     borderWidth: 1,
     width: wp('80%'),
-    borderRadius: wp('50%'),
+    fontSize: wp('4%'),
+    borderRadius: wp('10%'),
     borderColor: colors.border,
-    backgroundColor: colors.white,
     paddingHorizontal: wp('5%'),
-    paddingVertical: hp('1.6%'),
+    paddingVertical: wp("3%"),
+    backgroundColor: colors.white,
   },
 
   submitBtn: {
     width: wp('80%'),
+    fontSize: wp('4%'),
+    marginTop: hp('0.7%'),
     borderRadius: wp('50%'),
-    backgroundColor: colors.button,
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('1.6%'),
+    backgroundColor: colors.button,
   },
 
   submitText: {
     textAlign: 'center',
     color: colors.white,
+    fontFamily: "Poppins",
   },
 
   noteText: {

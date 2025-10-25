@@ -210,7 +210,6 @@ export default function GetStartedScreen() {
           </View>
         </LinearGradient>
       </SafeAreaView>
-    
   );
 }
 

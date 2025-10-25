@@ -88,8 +88,8 @@ const SignUp = () => {
               }} 
               resizeMode='contain'
             />
-            <Text style={[{ fontSize: wp('5.5%'), marginTop: hp('2.5%') }]}>Enter Verification Code</Text>
-            <Text style={[{ fontSize: wp('3.5%'), marginTop: hp('1%'), textAlign: 'center', paddingHorizontal: wp('10%')}]}>{forgotText}</Text>
+            <Text style={[{ fontSize: wp('5.5%'), marginTop: hp('1%'), fontFamily: "Poppins" }]}>Enter Verification Code</Text>
+            <Text style={[{ fontSize: wp('3.5%'), marginTop: hp('1%'), textAlign: 'center', paddingHorizontal: wp('10%'), fontFamily: "Poppins" }]}>{forgotText}</Text>
           </View>
 
           <View style={styles.formContainer}>
@@ -156,14 +156,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     width: wp('14%'),
     height: wp('14%'),
-    textAlign: 'center',  
+    textAlign: 'center',
+    fontFamily: "Poppins",
     borderRadius: wp('10%'),
+    marginTop: hp("1%"),
     borderColor: colors.border,
     backgroundColor: colors.white,
   },
 
   submitBtn: {
     width: wp('80%'),
+    fontSize: wp('4%'),
+    marginTop: hp('0.7%'),
     borderRadius: wp('50%'),
     paddingHorizontal: wp('5%'),
     paddingVertical: hp('1.6%'),
@@ -171,6 +175,7 @@ const styles = StyleSheet.create({
   },
 
   submitText: {
+    fontFamily: 'Poppins',
     textAlign: 'center',
     color: colors.white,
   },

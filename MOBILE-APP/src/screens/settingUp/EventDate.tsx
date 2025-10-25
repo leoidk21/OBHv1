@@ -14,17 +14,18 @@ import {Calendar, CalendarList, Agenda} from 'react-native-calendars';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 
 import { Alert } from "react-native";
-
 import { useEvent } from '../../context/EventContext';
+import { DateData } from 'react-native-calendars';
+
+const API_BASE = "https://ela-untraceable-foresakenly.ngrok-free.dev/api";
 
 const ClientsName = () => {
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const navigation: NavigationProp<ParamListBase> = useNavigation();
   
-  const [selectedDate, setSelectedDate] = useState("");
-  const [formattedDate, setFormattedDate] = useState(""); 
-
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [formattedDate, setFormattedDate] = useState<string | null>(null);
   const { updateEvent, debugStorageKeys } = useEvent();
 
   const handleDateSelect = async   (rawDate: string) => {
@@ -54,6 +55,24 @@ const ClientsName = () => {
     await new Promise<void>((resolve) => setTimeout(() => resolve(), 100));
     navigation.navigate("CompanyPolicy");
   };
+
+  const [bookedDates, setBookedDates] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchBookedDates = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/event-plans/availability`);
+        const data = await response.json();
+        if (data.success) {
+          setBookedDates(data.bookedDates.map((date: string) => date.split("T")[0]));
+        }
+      } catch (error) {
+        console.error("Error fetching booked dates:", error);
+      }
+    };
+
+    fetchBookedDates();
+  }, []);
 
   return (
     <SafeAreaProvider>
@@ -110,53 +129,57 @@ const ClientsName = () => {
           </View>  
 
           <Calendar
-            onDayPress={(day) => {
-              handleDateSelect(day.dateString);
-            }}
+            onDayPress={(day) => handleDateSelect(day.dateString)}
 
-            dayComponent={({ date, state }) => {
+            dayComponent={(props: any) => {
+              const date: DateData | undefined = props?.date;
+              const state: string = props?.state;
               const isSelected = date?.dateString === selectedDate;
               const isToday = date?.dateString === new Date().toISOString().split("T")[0];
+              const isBooked = date ? bookedDates.includes(date.dateString) : false;
+
+              const handleSelectDate = () => {
+                if (!isBooked && state !== "disabled" && date?.dateString) {
+                  handleDateSelect(date.dateString);
+                }
+              };
 
               return (
                 <TouchableOpacity
-                  onPress={() => {
-                    if (date && state !== "disabled") {
-                      handleDateSelect(date.dateString);
-                    }
-                  }}
+                  onPress={handleSelectDate}
+                  disabled={isBooked || state === "disabled"}
                   activeOpacity={1}
                   style={{
                     width: wp("8.5%"),
                     height: wp("8.5%"),
                     borderRadius: 50,
                     backgroundColor:
-                      isToday && !isSelected
-                        ? "#BA4557"
-                        : isSelected
-                          ? "#2A65DD"
-                          : "transparent",
+                      isBooked
+                        ? "#ccc"
+                        : isToday && !isSelected
+                          ? "#BA4557"
+                          : isSelected
+                            ? "#2A65DD"
+                            : "transparent",
                     justifyContent: "center",
                     alignItems: "center",
                   }}
-                  disabled={state === "disabled"}
                 >
                   <Text
                     style={{
-                      color:
-                        (isToday && !isSelected) || isSelected
+                      color: isBooked
+                        ? "#777"
+                        : (isToday && !isSelected) || isSelected
                           ? "#ffffff"
                           : state === "disabled"
                             ? "#a7aeb4ff"
                             : "#102E50",
                       fontSize: 12,
+                      textDecorationLine: isBooked ? "line-through" : "none",
+                      fontFamily: "Poppins",
                     }}
                   >
-                    {date?.day != null
-                      ? date.day < 10
-                        ? `0${date.day}`
-                        : date.day
-                      : ""}
+                    {date?.day != null ? (date.day < 10 ? `0${date.day}` : date.day) : ""}
                   </Text>
                 </TouchableOpacity>
               );
@@ -197,18 +220,18 @@ const ClientsName = () => {
           />
 
             <View style={styles.bottomContent}>
-            <TouchableOpacity
-              style={[
-                styles.createButton,
-                !selectedDate && styles.createButtonDisabled
-              ]}
-              onPress={handleCreateEvent}
-              disabled={!selectedDate}
-            >
-              <Text style={styles.buttonText}>
-                Create Event
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.createButton,
+                  !selectedDate && styles.createButtonDisabled
+                ]}
+                onPress={handleCreateEvent}
+                disabled={!selectedDate}
+              >
+                <Text style={styles.buttonText}>
+                  Create Event
+                </Text>
+              </TouchableOpacity>
           </View>
         </LinearGradient>
       </SafeAreaView>

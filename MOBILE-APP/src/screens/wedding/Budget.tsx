@@ -1,19 +1,20 @@
 import React, { useState } from "react";
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, Image, FlatList } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, Image, FlatList, KeyboardAvoidingView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import colors from "../config/colors";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
 import { faChevronRight, faUpload, faTrash } from "@fortawesome/free-solid-svg-icons";
+
 import NavigationSlider from "./ReusableComponents/NavigationSlider";
 import MenuBar from "./ReusableComponents/MenuBar";
 
 import * as SecureStore from 'expo-secure-store';
 import { useEvent } from '../../context/EventContext';
 
-const API_BASE = "https://ela-untraceable-foresakenly.ngrok-free.dev/api";
+const API_BASE = "https://ela-untraceable-foresakenly.ngrok-fredev/api";
 
 type ExpenseStatus = "Pending" | "Uploading" | "Proof Submitted" | "Paid" | "Verified" | "Rejected";
 
@@ -200,6 +201,7 @@ const Budget: React.FC = () => {
                   ? "#27ae60"
                   : "#e74c3c",
               fontWeight: "600",
+              fontFamily: 'Poppins',
             }}
           >
             {item.status}
@@ -276,6 +278,10 @@ const Budget: React.FC = () => {
 
           {/* Add Expense Modal */}
           <Modal visible={addExpenseModalVisible} transparent animationType="fade" onRequestClose={() => setAddExpenseModalVisible(false)}>
+            <KeyboardAvoidingView 
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
@@ -292,7 +298,7 @@ const Budget: React.FC = () => {
                       setCategoryModalVisible(true);
                     }}
                   >
-                    <Text style={{ color: selectedCategoryIndex !== null ? "#000" : "#666" }}>
+                    <Text style={{ color: selectedCategoryIndex !== null ? "#000" : "#666", fontFamily: 'Poppins' }}>
                       {selectedCategoryIndex !== null ? categories[selectedCategoryIndex] : "Select category"}
                     </Text>
                     <FontAwesomeIcon icon={faChevronRight} size={12} color="#343131" />
@@ -301,6 +307,7 @@ const Budget: React.FC = () => {
                   <TextInput
                     style={styles.inputField}
                     placeholder="Amount (e.g., 15000)"
+                    placeholderTextColor="#999"
                     keyboardType="numeric"
                     value={expenseAmount}
                     onChangeText={setExpenseAmount}
@@ -324,10 +331,15 @@ const Budget: React.FC = () => {
                 </View>
               </View>
             </View>
+            </KeyboardAvoidingView>
           </Modal>
 
           {/* Category Modal */}
           <Modal visible={categoryModalVisible} transparent animationType="fade" onRequestClose={() => setCategoryModalVisible(false)}>
+            <KeyboardAvoidingView 
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
@@ -352,7 +364,7 @@ const Budget: React.FC = () => {
                           setAddExpenseModalVisible(true);
                         }}
                       >
-                        <Text style={{ color: idx === selectedCategoryIndex ? "#fff" : "#000" }}>{c}</Text>
+                        <Text style={{ color: idx === selectedCategoryIndex ? "#fff" : "#000", fontFamily: 'Poppins' }}>{c}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -369,10 +381,15 @@ const Budget: React.FC = () => {
                 </View>
               </View>
             </View>
+            </KeyboardAvoidingView>
           </Modal>
 
           {/* Add Category Modal */}
           <Modal visible={addCategoryModalVisible} transparent animationType="fade" onRequestClose={() => setAddCategoryModalVisible(false)}>
+            <KeyboardAvoidingView 
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContainer}>
                 <View style={styles.modalHeader}>
@@ -383,7 +400,7 @@ const Budget: React.FC = () => {
                 </View>
 
                 <View style={styles.modalBody}>
-                  <TextInput value={categoryInput} onChangeText={setCategoryInput} style={styles.inputField} placeholder="Category name" />
+                  <TextInput value={categoryInput} onChangeText={setCategoryInput} style={styles.inputField} placeholder="Category name" placeholderTextColor="#999" />
                   <View style={styles.modalActions}>
                     <TouchableOpacity style={styles.primaryButton} onPress={addNewCategory}>
                       <Text style={styles.primaryButtonText}>Add</Text>
@@ -395,6 +412,7 @@ const Budget: React.FC = () => {
                 </View>
               </View>
             </View>
+            </KeyboardAvoidingView>
           </Modal>
         </LinearGradient>
         <MenuBar activeScreen="Budget" />
@@ -404,214 +422,224 @@ const Budget: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-    expenseCategoryText: {},
+expenseCategoryText: {
+  fontFamily: 'Poppins',
+},
 
-    modalOverlay: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "rgba(0,0,0,0.4)",
-    },
+modalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
+},
 
-    modalContainer: {
-        width: wp("88%"),
-        borderRadius: wp("2%"),
-        backgroundColor: colors.white,
-        maxHeight: hp("85%"),
-        overflow: "hidden",
-    },
+modalContainer: {
+    width: wp("88%"),
+    overflow: "hidden",
+    maxHeight: hp("85%"),
+    borderRadius: wp("2%"),
+    backgroundColor: colors.white,
+},
 
-    modalHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginHorizontal: wp("4%"),
-        marginTop: hp("1%"),
-    },
+modalHeader: {
+    marginTop: hp("1%"),
+    alignItems: "center",
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    paddingBottom: hp("0.6%"),
+    marginHorizontal: wp("4%"),
+    borderColor: colors.borderv3,
+    justifyContent: "space-between",
+},
 
-    modalTitle: {
-        fontSize: wp("5%"),
-        fontWeight: "600",
-    },
+modalTitle: {
+    fontWeight: "600",
+    fontSize: wp("4.2%"),
+    fontFamily: 'Poppins',
+},
 
-    closeIcon: {
-        fontSize: wp("7%"),
-        color: "#666",
-    },
-    modalBody: {
-        padding: wp("4%"),
-    },
+closeIcon: {
+    fontSize: wp("7%"),
+    color: "#666",
+},
+modalBody: {
+    padding: wp("4%"),
+},
 
-    inputField: {
-        borderWidth: 1,
-        borderColor: colors.borderv3,
-        borderRadius: 8,
-        padding: wp("3%"),
-        fontSize: wp("4%"),
-        marginTop: hp("1%"),
-    },
+inputField: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: wp("3%"),
+    marginTop: hp("1.6%"),
+    fontFamily: 'Poppins',
+    borderColor: colors.borderv3,
+},
 
-    primaryButton: {
-        backgroundColor: colors.button,
-        padding: hp("1.2%"),
-        borderRadius: wp("2%"),
-        alignItems: "center",
-    },
-    
-    primaryButtonText: {
-        color: colors.white,
-        fontWeight: "600",
-    },
+primaryButton: {
+    padding: hp("1.2%"),
+    alignItems: "center",
+    borderRadius: wp("2%"),
+    backgroundColor: colors.button,
+},
 
-    secondaryButton: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: hp("1.2%"),
-        borderRadius: wp("2%"),
-        alignItems: "center",
-    },
+primaryButtonText: {
+    fontWeight: "600",
+    color: colors.white,
+    fontFamily: 'Poppins',
+},
 
-    secondaryButtonText: {
-        color: "#333",
-        fontWeight: "600",
-    },
+secondaryButton: {
+    borderWidth: 1,
+    padding: hp("1.2%"),
+    alignItems: "center",
+    borderRadius: wp("2%"),
+    borderColor: colors.border,
+},
 
-    expensesHeader: {
-        marginTop: hp("2%"),
-        marginHorizontal: wp("6%"),
-    },
+secondaryButtonText: {
+    color: "#333",
+    fontWeight: "600",
+    fontFamily: 'Poppins',
+},
 
-    expensesHeaderTitle: {
-        fontSize: wp("5%"),
-        fontWeight: "700",
-    },
+expensesHeader: {
+    marginTop: hp("2%"),
+    marginHorizontal: wp("6%"),
+},
 
-    expensesHeaderSub: {
-        fontSize: wp("3.5%"),
-        color: "#666",
-        marginTop: hp("0.4%"),
-    },
+expensesHeaderTitle: {
+    fontSize: wp("5%"),
+    fontFamily: "Loviena",
+},
 
-    expensesListContainer: {
-        marginHorizontal: wp("6%"),
-        marginTop: hp("1%"),
-        flex: 1,
-    },
+expensesHeaderSub: {
+    color: "#666",
+    fontSize: wp("3.5%"),
+    marginTop: hp("0.4%"),
+    fontFamily: 'Poppins',
+},
 
-    noExpensesContainer: {
-        alignItems: "center",
-        padding: hp("4%"),
-    },
+expensesListContainer: {
+  flex: 1,
+  marginTop: hp("1%"),
+  marginHorizontal: wp("6%"),
+},
 
-    noExpensesText: {
-        color: "#666",
-    },
+noExpensesContainer: {
+  padding: hp("4%"),
+  alignItems: "center",
+},
 
-    expenseRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: colors.white,
-        padding: wp("3%"),
-        marginBottom: hp("1%"),
-        borderRadius: wp("2%"),
-        elevation: 1,
-        fontWeight: "600",
-        fontSize: wp("4%"),
-        borderWidth: 1,
-        borderColor: colors.borderv2,
-    },
+noExpensesText: {
+    color: "#666",
+    fontFamily: 'Poppins',
+},
 
-    expenseAmountText: {
-        color: "#2E7D32",
-        fontWeight: "700",
-        marginTop: hp("0.3%"),
-    },
+expenseRow: {
+    elevation: 1,
+    borderWidth: 1,
+    fontWeight: "600",
+    padding: wp("3%"),
+    fontSize: wp("4%"),
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: hp("1%"),
+    borderRadius: wp("2%"),
+    borderColor: colors.borderv2,
+    backgroundColor: colors.white,
+},
 
-    expenseActions: {
-        alignItems: "center",
-        justifyContent: "center",
-        marginLeft: wp("3%"),
-    },
+expenseAmountText: {
+    color: "#2E7D32",
+    fontFamily: 'Poppins',
+    marginTop: hp("0.3%"),
+},
 
-    smallButton: {
-        backgroundColor: colors.button,
-        paddingHorizontal: wp("2%"),
-        paddingVertical: hp("0.6%"),
-        borderRadius: wp("2%"),
-        marginVertical: hp("0.3%"),
-        flexDirection: "row",
-        alignItems: "center",
-    },
+expenseActions: {
+    alignItems: "center",
+    marginLeft: wp("3%"),
+    justifyContent: "center",
+},
 
-    smallButtonText: {
-        color: "#fff",
-        marginLeft: wp("1%"),
-        fontWeight: "600",
-    },
+smallButton: {
+  flexDirection: "row",
+  alignItems: "center",
+  borderRadius: wp("2%"),
+  marginVertical: hp("0.3%"),
+  paddingHorizontal: wp("2%"),
+  backgroundColor: colors.button,
+},
 
-    deleteBtn: {
-        backgroundColor: "#E74C3C",
-    },
+smallButtonText: {
+    color: "#fff",
+    marginLeft: wp("1%"),
+    fontFamily: 'Poppins',
+    marginTop: hp("0.5%"),
+},
 
-    proofThumbnail: {
-        width: wp("16%"),
-        height: wp("10%"),
-        borderRadius: 6,
-        resizeMode: "cover",
-        marginBottom: hp("0.6%"),
-    },
+deleteBtn: {
+    backgroundColor: "#E74C3C",
+},
 
-    addButtonContainer: {
-        position: "absolute",
-        right: wp("5%"),
-        bottom: hp("12%"),
-    },
+proofThumbnail: {
+  width: wp("16%"),
+  borderRadius: 6,
+  height: wp("10%"),
+  resizeMode: "cover",
+  marginBottom: hp("0.6%"),
+},
 
-    addButton: {
-        width: wp("14%"),
-        height: wp("14%"),
-        borderRadius: wp("100%"),
-        backgroundColor: colors.button,
-        alignItems: "center",
-        justifyContent: "center",
-        elevation: 5,
-    },
+addButtonContainer: {
+  right: wp("5%"),
+  bottom: hp("12%"),
+  position: "absolute",
+},
 
-    addButtonText: {
-        color: "#fff",
-        fontSize: wp("8%"),
-    },
+addButton: {
+    elevation: 5,
+    width: wp("14%"),
+    height: wp("14%"),
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: wp("100%"),
+    backgroundColor: colors.button,
+},
 
-    categorySelector: {
-        borderWidth: 1,
-        borderColor: colors.borderv3,
-        borderRadius: 8,
-        padding: wp("3%"),
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
+addButtonText: {
+    color: "#fff",
+    fontSize: wp("8%"),
+},
 
-    categoryList: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        marginTop: hp("1%"),
-    },
+categorySelector: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: wp("3%"),
+    flexDirection: "row",
+    alignItems: "center",
+    borderColor: colors.borderv3,
+    justifyContent: "space-between",
+},
 
-    categoryItem: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: wp("3%"),
-        borderRadius: 8,
-        marginRight: wp("2%"),
-        marginBottom: hp("1%"),
-    },
+categoryList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: hp("1%"),
+},
 
-    modalActions: {
-        marginTop: hp("2%"),
-        flexDirection: "row",
-        justifyContent: "space-between",
-    },
+categoryItem: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: wp("3%"),
+    marginRight: wp("2%"),
+    marginBottom: hp("1%"),
+    borderColor: colors.border,
+},
+
+modalActions: {
+    marginTop: hp("2%"),
+    flexDirection: "row",
+    justifyContent: "space-between",
+},
 });
 
 export default Budget;

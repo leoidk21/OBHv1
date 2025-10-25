@@ -76,13 +76,19 @@ const EventPrice = () => {
   ];
 
   const handlePackageSelect = async (selectedPackage: any) => {
+    let paxRange = selectedPackage.pax;
+    // If pax is a single number, convert to min-max format
+    if (!paxRange.includes('-')) {
+        paxRange = `${paxRange}-${paxRange}`;
+    }
+
     await updateEvent('selected_package', selectedPackage);
     await updateEvent('package_price', selectedPackage.price);
-    await updateEvent('guest_range', selectedPackage.pax);
+    await updateEvent('guest_range', paxRange);
     await debugStorageKeys();
 
     navigation.navigate('ClientsName');
-  };
+    };
 
   return (
     <SafeAreaProvider>
@@ -139,12 +145,6 @@ const EventPrice = () => {
                                 onPress={() => handlePackageSelect(pkg)}
                             >
                                 <View key={index} style={styles.card}>
-                                    <LinearGradient
-                                        colors={["#FFF8E7", "#DA9D61", "#FFF4F0"]}
-                                        style={styles.cardLine}
-                                    >
-                                        <View style={styles.cardLine}></View>
-                                    </LinearGradient>
                                     <View style={styles.cardHeader}>
                                         <Text style={styles.pax}>{pkg.pax} pax</Text>
                                         <Text style={styles.price}>{pkg.price}</Text>
@@ -153,7 +153,7 @@ const EventPrice = () => {
                                     <Text style={styles.subHeader}>Coordinators:</Text>
                                     {pkg.coordinators.map((role, i) => (
                                         <Text key={i} style={styles.coordinator}>
-                                        ✓ {role}
+                                        - {role}
                                         </Text>
                                     ))}
                                 </View>
@@ -162,7 +162,7 @@ const EventPrice = () => {
 
                         {/* Additional Section */}
                         <View style={styles.extraCard}>
-                            <Text style={styles.extraHeader}>📍 Additional</Text>
+                            <Text style={styles.extraHeader}>Additional</Text>
                             <Text style={styles.extraText}>
                                 Out of Town Fee (OOTF) — depends on location
                             </Text>
@@ -170,7 +170,7 @@ const EventPrice = () => {
 
                         {/* Promo Section */}
                         <View style={styles.promoCard}>
-                            <Text style={styles.extraHeader}>🎁 Promo</Text>
+                            <Text style={styles.extraHeader}>Promo</Text>
                             <Text style={styles.extraText}>
                                 Book 6 months in advance and get a{" "}
                                 <Text style={{ fontWeight: "bold" }}>10% Discount!</Text>
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
         paddingLeft: wp("6%"),
         fontFamily: "Loviena",
         color: colors.black,
-        lineHeight: wp("8%"),
+        lineHeight: wp("7%"),
         height: hp("8%"),
     },
 
@@ -241,27 +241,14 @@ const styles = StyleSheet.create({
         marginHorizontal: wp("6%"),
     },
 
-    packageHeader: {
-        color: colors.brown,
-        fontSize: wp("4.5%"),
-    },
-
     card: {
-        height: 'auto',
         marginTop: hp("1.5%"),
-        paddingLeft: wp("5.5%"),
         borderRadius: wp("2.5%"),
         paddingVertical: hp("2%"),
         paddingHorizontal: wp("4%"),
         backgroundColor: colors.white,
         borderWidth: 1,
-        borderColor: colors.primary,
-
-        elevation: 3,
-        shadowRadius: 1,
-        shadowOpacity: 0.25,
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 2 },
+        borderColor: colors.border,
     },
 
     cardHeader: {
@@ -274,83 +261,68 @@ const styles = StyleSheet.create({
         borderBottomColor: colors.border,
     },
 
-    cardLine: {
-        top: 0,
-        left: 0,
-        bottom: 0,
-        width: wp("2%"),
-        position: "absolute",
-        borderTopLeftRadius: wp("2.5%"),
-        borderBottomLeftRadius: wp("2.5%"),
-    },
-
     pax: {
+        fontFamily: "Poppins",
         fontWeight: 500,
         color: colors.brown,
-        fontSize: wp("4.5%"),
+        fontSize: wp("3.5%"),
     },
 
     price: {
+        fontFamily: "Poppins",
         fontWeight: 500,
-        fontSize: wp("4%"),
+        fontSize: wp("3.5%"),
         color: colors.redv2,
     },
 
     subHeader: {
+        fontFamily: "Poppins",
         color: colors.brown,
-        fontSize: wp("4.5%"),
+        fontSize: wp("4%"),
         marginTop: hp("0.8%"),
         marginBottom: hp("0.5%"),
     },
 
     coordinator: {
+        fontFamily: "Poppins",
         color: colors.brown,
         fontSize: wp("3.3%"),
         marginVertical: hp("0.2%"),
     },
 
     extraCard: {
-        borderWidth: 1,
         marginTop: hp("1.5%"),
         borderRadius: wp("2.5%"),
         paddingVertical: hp("2%"),
         paddingHorizontal: wp("4%"),
-        borderColor: colors.primary,
         backgroundColor: colors.white,
 
-        elevation: 3,
-        shadowRadius: 1,
-        shadowOpacity: 0.25,
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 2 },
+         borderWidth: 1, 
+        borderColor: colors.border,
     },
 
     extraHeader: {
         fontWeight: 500,
+        fontFamily: "Poppins",
         color: colors.brown,
         fontSize: wp("4.5%"),
     },
 
     extraText: {
+        fontFamily: "Poppins",
         color: colors.brown,
         fontSize: wp("3.6%"),
-        marginTop: hp("0.6%"),
     },
 
     promoCard: {
-        borderWidth: 1,
         marginTop: hp("1.5%"),
         borderRadius: wp("2.5%"),
         paddingVertical: hp("2%"),
         paddingHorizontal: wp("4%"),
-        borderColor: colors.primary,
+        
         backgroundColor: colors.white,
-
-        elevation: 3,
-        shadowRadius: 1,
-        shadowOpacity: 0.25,
-        shadowColor: colors.black,
-        shadowOffset: { width: 0, height: 2 },
+        borderWidth: 1, 
+        borderColor: colors.border,
     },
 });
 

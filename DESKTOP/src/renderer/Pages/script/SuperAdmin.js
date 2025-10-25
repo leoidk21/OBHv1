@@ -396,24 +396,40 @@ function exportLogs() {
     alert("Export functionality - implement CSV generation");
 }
 
+function initializeQRDownload() {
+    console.log('Initializing QR download...');
+    
+    // Use event delegation for the download button
+    document.addEventListener('click', function(e) {
+        if (e.target && (e.target.id === 'downloadBtn' || e.target.classList.contains('download-btn'))) {
+            console.log('Download button clicked');
+            e.preventDefault();
+            e.stopPropagation();
+            downloadQRCode();
+            return false;
+        }
+    });
+    
+    // Also try to find and attach directly when QR tab becomes active
+    const downloadBtn = document.getElementById('downloadBtn');
+    if (downloadBtn) {
+        console.log('Found download button directly');
+        downloadBtn.addEventListener('click', downloadQRCode);
+    }
+}
+
 // Tab switching
 document.querySelectorAll(".menu-item[data-tab]").forEach((item) => {
     item.addEventListener("click", (e) => {
         e.preventDefault();
         const tabName = item.dataset.tab;
 
-        // localStorage.setItem("currentTab", tabName);
-
         // Update active menu item
-        document
-            .querySelectorAll(".menu-item")
-            .forEach((m) => m.classList.remove("active"));
+        document.querySelectorAll(".menu-item").forEach((m) => m.classList.remove("active"));
         item.classList.add("active");
 
         // Show corresponding tab
-        document
-            .querySelectorAll(".tab-content")
-            .forEach((tab) => tab.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.remove("active"));
         document.getElementById(`${tabName}Tab`).classList.add("active");
 
         // Update page title
@@ -428,17 +444,79 @@ document.querySelectorAll(".menu-item[data-tab]").forEach((item) => {
 
         // Load data for specific tabs
         if (tabName === "admins") loadAdmins();
+        if (tabName === "qr") initializeQRDownload(); // Initialize QR download when QR tab is active
 
         // Hide statsGrid only when on account tab
         const statsGrid = document.getElementById("statsGrid");
         if (statsGrid) {
             const hideTabs = ["qr", "gallery", "notifications"];
-            statsGrid.style.display = hideTabs.includes(tabName)
-                ? "none"
-                : "grid";
+            statsGrid.style.display = hideTabs.includes(tabName) ? "none" : "grid";
         }
     });
 });
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing QR download...');
+});
+
+// Your existing downloadQRCode function (keep this as is)
+function downloadQRCode() {
+    console.log('downloadQRCode function called');
+    const qrImage = document.querySelector('.qrCode img');
+    const notification = document.getElementById('notification');
+    
+    if (!qrImage) {
+        console.error('QR image not found!');
+        alert('QR code image not found');
+        return;
+    }
+
+    console.log('QR image found:', qrImage.src);
+
+    // Create a temporary canvas to draw the QR code
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.crossOrigin = "Anonymous";
+    
+    img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        const link = document.createElement('a');
+        link.download = 'qr-code.png';
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Show success notification if it exists
+        if (notification) {
+            showNotification(notification);
+        } else {
+            alert('QR code downloaded successfully!');
+        }
+        
+        console.log('QR code downloaded successfully');
+    };
+    
+    img.onerror = function() {
+        console.error('Error loading image, trying without CORS');
+        img.crossOrigin = null;
+        img.src = qrImage.src + '?t=' + new Date().getTime();
+    };
+    
+    img.src = qrImage.src;
+}
+
+function showNotification(notification) {
+    notification.classList.add('show');
+    setTimeout(function() {
+        notification.classList.remove('show');
+    }, 3000);
+}
 
 function restoreLastTab() {
     const defaultTab = "logs"; 
@@ -712,3 +790,4 @@ document.querySelector(".send-btn").addEventListener("click", () => {
     console.log("Client name:", clientName);
     alert(`Ready to send ${selectedFiles.length} file(s) to "${clientName}"`);
 });
+

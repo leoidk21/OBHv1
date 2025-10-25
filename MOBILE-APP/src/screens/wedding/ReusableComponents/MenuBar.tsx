@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     height: 'auto',
     width: wp("100%"),
     flexDirection: "row",
-    paddingVertical: hp("1.2%"),
+    paddingTop: hp("1.6%"),
     backgroundColor: colors.white,
     justifyContent: "space-between",
   },
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   },
       
   navigationLine: {
-    top: -10,
+    top: -12,
     zIndex: 1,
     left: "50%",
     height: "6%",
@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
     fontSize: wp("3%"),
     textAlign: "center",
     fontFamily: "Poppins",
+    paddingBottom: hp("1%"),
   },
 });
 

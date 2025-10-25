@@ -7,6 +7,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NavigationProp, ParamListBase, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import colors from "../config/colors";
+import { useFonts } from 'expo-font';
 import CheckBox from "react-native-check-box";
 import * as SecureStore from 'expo-secure-store';
 import { useEvent } from '../../context/EventContext';
@@ -62,6 +63,14 @@ const policies: PolicyItem[] = [
 ];
 
 const CompanyPolicy = () => {
+  const [fontsLoaded] = useFonts({
+    'Poppins': require('../../assets/fonts/Poppins-Regular.ttf'),
+    'Loviena': require('../../assets/fonts/lovienapersonaluseonlyregular-yy4pq.ttf'),
+    'Canela': require('../../assets/fonts/CanelaCondensed-Regular-Trial.otf'),
+    'Senbatsu': require('../../assets/fonts/Senbatsu.otf'),
+    'Velista': require('../../assets/fonts/VELISTA.ttf'),
+  });
+
   const [accepted, setAccepted] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -232,7 +241,7 @@ const CompanyPolicy = () => {
           <View style={styles.termsCondition}>
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
               <CheckBox isChecked={accepted} onClick={() => setAccepted(!accepted)} />
-              <Text>Please accept our Terms & Conditions</Text>
+              <Text style={{ fontFamily: "Poppins" }}>Please accept our Terms & Conditions</Text>
             </View>
             <TouchableOpacity
               style={[styles.continueBtn, !accepted && styles.continueBtnDisabled]}
@@ -244,7 +253,7 @@ const CompanyPolicy = () => {
           </View>
         </ScrollView>
 
-                {/* Review Modal */}
+        {/* Review Modal */}
         <Modal
           visible={showReviewModal}
           animationType="slide"
@@ -254,8 +263,8 @@ const CompanyPolicy = () => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Ready for Part 2!</Text>
-                <Text style={styles.modalSubtitle}>Let's review your event details</Text>
+                <Text style={styles.modalTitle}>Ready for Part 2?</Text>
+                <Text style={styles.modalSubtitle}>Please review your event details</Text>
               </View>
 
               <ScrollView style={styles.reviewContent}>
@@ -329,7 +338,7 @@ const CompanyPolicy = () => {
                   style={styles.modalButtonPrimary}
                   onPress={handleConfirmAndContinue}
                 >
-                  <Text style={styles.modalButtonPrimaryText}>Start Part 2!</Text>
+                  <Text style={styles.modalButtonPrimaryText}>Continue</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -388,6 +397,7 @@ const styles = StyleSheet.create({
     policiesText: {
       fontSize: wp("4%"),
       color: colors.white,
+      fontFamily: 'Poppins',
     },
 
     step: {
@@ -408,7 +418,7 @@ const styles = StyleSheet.create({
       top: hp("2%"), 
       right: wp("6%"), 
       fontSize: wp("4%"), 
-      color: colors.brown
+      color: colors.brown,
     },
 
     section: {
@@ -419,11 +429,13 @@ const styles = StyleSheet.create({
     sectionTitle: {
       color: colors.black,
       fontSize: wp("4.5%"),
+      fontFamily: 'Poppins',
       marginVertical: hp("0.5%"),
     },
 
     sectionContent: {
       textAlign: "justify",
+      fontFamily: 'Poppins',
       marginHorizontal: wp("5%"),
     },
 
@@ -461,6 +473,7 @@ const styles = StyleSheet.create({
       justifyContent: 'center',
       alignItems: 'center',
     },
+
     modalContainer: {
       backgroundColor: 'white',
       borderRadius: 20,
@@ -477,100 +490,119 @@ const styles = StyleSheet.create({
       shadowRadius: 4,
       elevation: 5,
     },
+    
     modalHeader: {
       alignItems: 'center',
       marginBottom: 20,
     },
+    
     modalTitle: {
       fontSize: 24,
-      fontWeight: 'bold',
-      color: '#19579C',
       textAlign: 'center',
+      fontFamily: "Poppins",
     },
+    
     modalSubtitle: {
+      marginTop: 5,
       fontSize: 16,
       color: '#666',
       textAlign: 'center',
-      marginTop: 5,
+      fontFamily: "Poppins",
     },
+    
     reviewContent: {
       maxHeight: 400,
     },
+    
     reviewSection: {
-      backgroundColor: '#f8f9fa',
       padding: 15,
       borderRadius: 10,
       marginBottom: 20,
+      backgroundColor: '#f8f9fa',
     },
+    
     reviewSectionTitle: {
       fontSize: 18,
-      fontWeight: 'bold',
       color: '#333',
       marginBottom: 15,
-      borderBottomWidth: 1,
-      borderBottomColor: '#ddd',
       paddingBottom: 5,
+      borderBottomWidth: 1,
+      fontFamily: "Poppins",
+      borderBottomColor: '#ddd',
     },
+    
     reviewItem: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       marginBottom: 10,
       flexWrap: 'wrap',
     },
+    
     reviewLabel: {
       fontSize: 14,
       fontWeight: '600',
       color: '#555',
       flex: 1,
+      fontFamily: "Poppins",
     },
+    
     reviewValue: {
       fontSize: 14,
-      color: '#19579C',
       fontWeight: '500',
       flex: 1,
       textAlign: 'right',
     },
+    
     coordinatorsList: {
       marginTop: 5,
     },
+    
     coordinatorText: {
       fontSize: 12,
       color: '#666',
       marginBottom: 2,
+      fontFamily: "Poppins",
     },
+    
     nextStepsSection: {
-      backgroundColor: '#e8f4fd',
       padding: 15,
       borderRadius: 10,
       borderLeftWidth: 4,
-      borderLeftColor: '#19579C',
+      backgroundColor: '#f8f9fa',
+      borderLeftColor: colors.brown,
     },
+    
     nextStepsTitle: {
       fontSize: 18,
-      fontWeight: 'bold',
-      color: '#19579C',
-      marginBottom: 10,
+      fontFamily: "Poppins",
     },
+    
     nextStepsText: {
       fontSize: 14,
       color: '#333',
       marginBottom: 10,
       lineHeight: 20,
+      fontFamily: "Poppins",
     },
+    
     nextStepsList: {
       marginLeft: 10,
     },
+    
     nextStepsItem: {
       fontSize: 13,
       color: '#555',
       marginBottom: 5,
+      fontFamily: "Poppins",
     },
+    
     modalButtons: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       marginTop: 20,
       gap: 10,
     },
+    
     modalButtonSecondary: {
       flex: 1,
       padding: 15,
@@ -578,18 +610,21 @@ const styles = StyleSheet.create({
       backgroundColor: '#f0f0f0',
       alignItems: 'center',
     },
+    
     modalButtonSecondaryText: {
       color: '#666',
       fontSize: 16,
       fontWeight: '600',
     },
+    
     modalButtonPrimary: {
       flex: 1,
       padding: 15,
       borderRadius: 10,
-      backgroundColor: '#19579C',
+      backgroundColor: colors.brown,
       alignItems: 'center',
     },
+    
     modalButtonPrimaryText: {
       color: '#ffffff',
       fontSize: 16,

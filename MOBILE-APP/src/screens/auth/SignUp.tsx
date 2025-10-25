@@ -122,13 +122,14 @@ const SignUp = () => {
                         }} 
                         resizeMode='contain'
                       />
-                      <Text style={[styles.topText, { fontSize: wp('5.5%') }]}>Create an account</Text>
+                      <Text style={[styles.topText, { fontSize: wp('5.5%'), fontFamily: "Poppins" }]}>Create an account</Text>
                     </View>
 
                     <View style={styles.formContainer}>
                       <TextInput
                         ref={firstNameRef}
                         placeholder="First Name"
+                        placeholderTextColor="#999"
                         value={firstName}
                         onChangeText={setFirstName}
                         style={[
@@ -142,6 +143,7 @@ const SignUp = () => {
                       <TextInput
                         ref={lastNameRef}
                         placeholder="Last Name"
+                        placeholderTextColor="#999"
                         value={lastName}
                         onChangeText={setLastName}
                         style={[
@@ -154,7 +156,8 @@ const SignUp = () => {
 
                       <TextInput
                         ref={emailRef}
-                        placeholder='Email' 
+                        placeholder='Email'
+                        placeholderTextColor="#999"
                         value={email}
                         onChangeText={setEmail}           
                         style={[
@@ -167,7 +170,8 @@ const SignUp = () => {
 
                       <TextInput
                         ref={passwordRef}
-                        placeholder='Password' 
+                        placeholder='Password'
+                        placeholderTextColor="#999"
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry
@@ -192,7 +196,7 @@ const SignUp = () => {
               <View style={styles.loginContainer}>
                 <TouchableOpacity onPress={() => navigation.navigate('SignIn')}>
                   <Text style={styles.loginText}>
-                    Already have an account?{' '}
+                      Already have an account?{' '}
                     <Text style={styles.loginLink}>Sign In</Text>
                   </Text>
                 </TouchableOpacity>
@@ -226,6 +230,7 @@ const styles = StyleSheet.create({
   },
 
   textInput: {
+    color: '#000000',
     borderWidth: 1,
     width: wp('80%'),
     fontSize: wp('4%'),

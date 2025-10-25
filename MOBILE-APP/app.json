@@ -1,16 +1,15 @@
 {
   "expo": {
-    "name": "Mobile",
+    "name": "Orchestrated By HIStory Event Planner",
     "slug": "Mobile",
     "scheme": "com.orchestratedbyhistory.eventplanner",
-    "owner": "leochavez2002",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./src/assets/LOGO.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./src/assets/LOGO.jpg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -24,7 +23,7 @@
     "android": {
       "package": "com.orchestratedbyhistory.eventplanner",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./src/assets/LOGO.jpg",
         "backgroundColor": "#ffffff"
       },
       "intentFilters": [
@@ -40,7 +39,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./src/assets/favicon.png"
     },
     "plugins": [
       "expo-font",

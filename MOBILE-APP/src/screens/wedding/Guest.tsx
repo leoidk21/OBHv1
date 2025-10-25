@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform  } from "react-native";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp} from "react-native-responsive-screen";
 import colors from "../config/colors";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
@@ -61,17 +61,36 @@ const GuestComponent  = () => {
       return;
     }
 
+    const guestRange = eventData?.guest_range || "0-0";
+    
+    // Ensure min and max are numbers, even if guestRange is a single number
+    let minGuests = 0;
+    let maxGuests = 0;
+    
+    if (guestRange.includes('-')) {
+      [minGuests, maxGuests] = guestRange.split('-').map((num: string) => parseInt(num.trim(), 10));
+    } else {
+      minGuests = maxGuests = parseInt(guestRange.trim(), 10);
+    }
+
+    // Check guest limit
+    if (guestStats.total >= maxGuests) {
+      Alert.alert(
+        "Guest Limit Reached",
+        `You can only invite up to ${maxGuests} guests for your selected package (${guestRange} pax).`
+      );
+      return;
+    }
+
     const statusOptions = ['Accepted', 'Declined', 'Pending'];
     const guestStatus = selectedRSVP === -1 ? 'Pending' : statusOptions[selectedRSVP];
 
-    // Use the context method to add guest
     addGuest({
       name: currentGuestName.trim(),
       status: guestStatus,
       inviteLink: Math.random().toString(36).substring(7)
     });
 
-    // Reset form
     setCurrentGuestName('');
     setSelectedRSVP(-1);
     setModalVisible(false);
@@ -135,6 +154,10 @@ const GuestComponent  = () => {
               onRequestClose={closeModal}
               statusBarTranslucent={true}
           >
+            <KeyboardAvoidingView 
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
               <View style={styles.modalOverlay}>
                   <View style={styles.modalContainer}>
                       <View style={styles.closeButtonContainer}>
@@ -154,13 +177,14 @@ const GuestComponent  = () => {
                               value={currentGuestName}
                               onChangeText={setCurrentGuestName}
                               placeholder="Enter Full Name"
+                              placeholderTextColor="#999"
                           />
                       </View>
 
                       {/* RSVP Selection inside main modal */}
-                      <View style={styles.rsvpContainer}>
+                      <View>
                         <View style={styles.selectRSVPContainer}>
-                          {["Accepted", "Declined", "Pending"].map(
+                          {["Accepted", "Pending"].map(
                             (label, index) => (
                               <TouchableOpacity
                                 key={index}
@@ -168,7 +192,7 @@ const GuestComponent  = () => {
                                   styles.selectRSVP,
                                   {
                                     backgroundColor: selectedRSVP === index
-                                      ? "#102E50"
+                                      ? "#d4edda"
                                       : "#ffffff",
                                   },
                                 ]}
@@ -179,7 +203,7 @@ const GuestComponent  = () => {
                                     styles.selectedRSVPText,
                                     {
                                       color: selectedRSVP === index
-                                        ? "#ffffff"
+                                        ? "#000000"
                                         : "#000000",
                                     },
                                   ]}
@@ -202,6 +226,7 @@ const GuestComponent  = () => {
                       </View>
                   </View>
               </View>
+            </KeyboardAvoidingView>
           </Modal>
 
           {/* Guest Stats */}
@@ -230,6 +255,10 @@ const GuestComponent  = () => {
 
                 {/* ROWS */}
                 {filteredGuests.map((guest) => (
+                  <TouchableOpacity 
+                    style={styles.deleteButton}
+                    onPress={() => handleRemoveGuest(guest.id)}
+                  >
                   <View key={guest.id} style={styles.guestBadge}>
                     <Text style={[styles.filteredGuestText, styles.columnName]}>{guest.name}</Text>
                     <Text
@@ -244,13 +273,8 @@ const GuestComponent  = () => {
                     <Text style={[styles.filteredGuestText, styles.columnLink]}>
                       …/invite/{guest.inviteLink}
                     </Text>
-                    <TouchableOpacity 
-                      style={styles.deleteButton}
-                      onPress={() => handleRemoveGuest(guest.id)}
-                    >
-                      <Text style={styles.deleteButtonText}>×</Text>
-                    </TouchableOpacity>
                   </View>
+                  </TouchableOpacity>
                 ))}
               </View>
               
@@ -277,6 +301,7 @@ const GuestComponent  = () => {
 };
 
 const styles = StyleSheet.create({
+  // HEADER styles
   searchBarContainer: {
     gap: 10,
     borderWidth: 1,
@@ -296,90 +321,17 @@ const styles = StyleSheet.create({
     height: hp("5.5%"),
   },
 
-  totalGuests: {
-    borderRadius: 8,
-    marginVertical: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  totalGuestsText: {
-    display: 'flex',
-    gap: 10,
-    marginBottom: hp("1%"),
-    borderRadius: wp("8%"),
-    flexDirection: 'row',
-  },
-
-  totalText: {
-    backgroundColor: '#e9ecef',
-    color: '#495057',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    padding: wp("5%"),
-    fontWeight: '600',
-  },
-
-  acceptedText: {
-    backgroundColor: '#d1fae5',
-    color: '#065f46',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    fontWeight: '600',
-  },
-
-  pendingText: {
-    backgroundColor: '#fef3c7',
-    color: '#92400e',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    fontWeight: '600',
-  },
-
-  declinedText: {
-    backgroundColor: '#fee2e2',
-    color: '#991b1b',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    fontWeight: '600',
-  },
-
-  buttonContainer: {
-      position: "absolute",
-        right: wp("5%"),
-        bottom: hp("12%"),
-  },
-
-  button: {
-    width: wp("14%"),
-    height: wp("14%"),
-    borderRadius: wp("100%"),
-    backgroundColor: colors.button,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 5,
-  },
-
-  buttonText: {
-    fontSize: wp("7%"),
-    textAlign: "center",
-    color: colors.white,
-  },
-
+  // ADD NEW GUEST MODAL styles
   modalOverlay: {
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      zIndex: 1000,
-      position: 'absolute',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
 
   modalContainer: {
@@ -391,85 +343,54 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
 
+  closeButtonContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: hp("1%"),
+    marginHorizontal: wp("4%"),
+    justifyContent: "space-between",
+  },
+
   modalTitle: {
-    fontSize: wp("5%"),
+    fontSize: wp("4.2%"),
+    fontFamily: 'Poppins',
     paddingVertical: hp("0.5%"),
   },
 
-  closeButtonText: {
-      fontSize: wp("7%"),
-  },
-
   closeBtn: {
-      margin: 0,
-      padding: 0,
+    margin: 0,
+    padding: 0,
   },
 
-  closeButtonContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginVertical: hp("1%"),
-      marginHorizontal: wp("4%"),
-      justifyContent: "space-between",
+  closeButtonText: {
+    fontSize: wp("7%"),
   },
 
   underline: {
-      width: wp("76%"),
-      alignSelf: "center",
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+    width: wp("76%"),
+    alignSelf: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
 
   inputGuest: {
-      alignSelf: "center",
-      marginTop: hp("1.2%"),
+    alignSelf: "center",
+    marginTop: hp("1.2%"),
   },
 
   inputGuestText: {
-      borderWidth: 1,
-      borderRadius: 9,
-      width: wp("76%"),
-      marginTop: hp("1%"),
-      paddingHorizontal: wp("3%"),
-      borderColor: colors.borderv3,
+    borderWidth: 1,
+    borderRadius: 9,
+    width: wp("76%"),
+    marginTop: hp("1%"),
+    fontFamily: 'Poppins',
+    paddingHorizontal: wp("3%"),
+    borderColor: colors.borderv3,
   },
-
-  rsvpStatusContainer: {
-      borderWidth: 1,
-      borderRadius: 9,
-      width: wp("76%"),
-      alignSelf: "center",
-      flexDirection: "row",
-      alignItems: "center",
-      marginTop: hp("1.5%"),
-      paddingVertical: hp("1.5%"),
-      paddingHorizontal: wp("3%"),
-      borderColor: colors.borderv3,
-      justifyContent: "space-between",
-  },
-
-  saveButtonContainer: {
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: hp("2.5%"),
-  },
-
-  saveButton: {
-      width: wp("76%"),
-      padding: wp("3%"),
-      borderRadius: wp("2.5%"),
-      backgroundColor: colors.button,
-  },
-
-  saveButtonText: {
-      textAlign: "center",
-      color: colors.white,
-  },
-
-  saveSideRelationship: {},
 
   selectRSVPContainer: {
-    marginVertical: hp("1.5%"),
+    alignItems: 'center',
+    marginBottom: hp("2%"),
     marginHorizontal: wp("3%"),
     alignContent: "flex-start",
     justifyContent: "flex-start",
@@ -479,18 +400,94 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     borderWidth: 1,
     borderRadius: 9,
-    margin: wp("2%"),
+    width: wp("76%"),
+    marginTop: hp("2%"),
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: hp("1.8%"),
-    borderColor: colors.borderv3,
+    paddingVertical: hp("1.5%"),
+    borderColor: colors.borderv1,
   },
 
-  selectedRSVPText: {},
-  
+  selectedRSVPText: {
+    fontFamily: 'Poppins',
+  },
+
+  saveButtonContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: hp("2.5%"),
+  },
+
+  saveButton: {
+    width: wp("76%"),
+    padding: wp("3%"),
+    borderRadius: wp("2.5%"),
+    backgroundColor: colors.button,
+  },
+
+  saveButtonText: {
+    textAlign: "center",
+    color: colors.white,
+    fontFamily: 'Poppins',
+  },
+
+  // Guest Stats styles
+  totalGuests: {
+    borderRadius: 8,
+    marginVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  totalGuestsText: {
+    gap: 5,
+    display: 'flex',
+    flexDirection: 'row',
+    borderRadius: wp("8%"),
+    marginBottom: hp("1%"),
+  },
+
+  totalText: {
+    borderRadius: 8,
+    padding: wp("5%"),
+    color: '#495057',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    fontFamily: 'Poppins',
+    backgroundColor: '#e9ecef',
+  },
+
+  acceptedText: {
+    borderRadius: 8,
+    color: '#065f46',
+    paddingVertical: 5,
+    fontFamily: 'Poppins',
+    paddingHorizontal: 8,
+    backgroundColor: '#d1fae5',
+  },
+
+  pendingText: {
+    borderRadius: 8,
+    color: '#92400e',
+    paddingVertical: 5,
+    fontFamily: 'Poppins',
+    paddingHorizontal: 8,
+    backgroundColor: '#fef3c7',
+  },
+
+  declinedText: {
+    borderRadius: 8,
+    color: '#991b1b',
+    paddingVertical: 5,
+    fontFamily: 'Poppins',
+    paddingHorizontal: 8,
+    backgroundColor: '#fee2e2',
+  },
+
+  // GUEST LIST styles
   invitedGuestsContainer: {
-     flex: 1,
-     maxHeight: 'auto',
+    flex: 1,
+    maxHeight: 'auto',
   },
 
   scrollGuests: {
@@ -502,63 +499,104 @@ const styles = StyleSheet.create({
   },
 
   guestBadgeContainer: {
-      alignItems: "center",
-      marginBottom: hp("2%"),
-      marginHorizontal: wp("5%"),
+    alignItems: "center",
+    marginBottom: hp("2%"),
+    marginHorizontal: wp("5%"),
   },
 
   guestLabels: {
-      width: "100%",
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: hp("1%"),
-      borderRadius: wp("2%"),
-      paddingVertical: hp("1.6%"),
-      paddingHorizontal: wp("3%"),
-      backgroundColor: colors.borderv2,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: hp("1%"),
+    borderRadius: wp("2%"),
+    paddingVertical: hp("1.6%"),
+    paddingHorizontal: wp("3%"),
+    backgroundColor: colors.borderv2,
   },
 
   guestBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      width: "100%",
-      borderWidth: 1,
-      borderColor: colors.borderv2,
-      borderRadius: wp("2%"),
-      paddingVertical: hp("1.6%"),
-      paddingHorizontal: wp("3%"),
-      backgroundColor: colors.white,
-      marginBottom: hp("1%"),
+    width: "100%",
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: hp("1%"),
+    borderRadius: wp("2%"),
+    paddingVertical: hp("1.6%"),
+    paddingHorizontal: wp("3%"),
+    backgroundColor: colors.white,
+    borderColor: colors.borderv2,
   },
 
   guestLabelText: {
-    fontWeight: "bold",
+    fontWeight: 600,
     textAlign: "center",
     color: colors.black,
+    fontFamily: 'Poppins',
   },
 
   filteredGuestText: {
     textAlign: "center",
     color: colors.black,
+    fontSize: wp("3%"),
+    fontFamily: 'Poppins',
   },
 
   columnName: { flex: 2, textAlign: "left" },
   columnStatus: { flex: 1, textAlign: "center" },
   columnLink: { flex: 2, textAlign: "right" },
 
-  noResultsContainer: {},
-  noResultsText: {},
-  rsvpContainer: {},
   deleteButton: {},
   deleteButtonText: {},
-  
+
+  noResultsContainer: {},
+  noResultsText: {},
+
+  // FLOATING BUTTON styles
+  buttonContainer: {
+    right: wp("5%"),
+    bottom: hp("12%"),
+    position: "absolute",
+  },
+
+  button: {
+    elevation: 5,
+    width: wp("14%"),
+    height: wp("14%"),
+    alignItems: "center",
+    borderRadius: wp("100%"),
+    justifyContent: "center",
+    backgroundColor: colors.button,
+  },
+
+  buttonText: {
+    fontSize: wp("7%"),
+    textAlign: "center",
+    color: colors.white,
+  },
+
+  // Unused styles
+  saveSideRelationship: {},
+  rsvpStatusContainer: {
+    borderWidth: 1,
+    borderRadius: 9,
+    width: wp("76%"),
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: hp("1.5%"),
+    paddingVertical: hp("1.5%"),
+    paddingHorizontal: wp("3%"),
+    borderColor: colors.borderv3,
+    justifyContent: "space-between",
+  },
   rsvpText: {
     color: colors.black,
+    fontFamily: 'Poppins',
     marginTop: hp("1.5%"),
     marginHorizontal: wp("5%"),
   },
 });
-
 const getStatusColor = (status: string): string => {
   const statusColors = {
     Accepted: '#4CAF50',

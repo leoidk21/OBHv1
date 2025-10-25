@@ -169,15 +169,17 @@
                         <p class="tab-description">One time use QR code for mobile app installation</p>
                         <div class="qrCode">
                             <p class="qrCodeText" style="display: none;">Qr Code will be displayed here</p>
-                            <svg width="270" height="271" viewBox="0 0 270 271" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M0 90.3333H90V0H0V90.3333ZM15 15.0556H75V75.2778H15V15.0556ZM30 30.1111H60V60.2222H30V30.1111ZM180 90.3333H270V0H180V90.3333ZM195 15.0556H255V75.2778H195V15.0556ZM210 30.1111H240V60.2222H210V30.1111ZM0 271H90V180.667H0V271ZM15 195.722H75V255.944H15V195.722ZM30 210.778H60V240.889H30V210.778ZM255 240.889H270V271H240V225.833H255V240.889ZM255 195.722H270V210.778H255V195.722ZM255 180.667V195.722H240V180.667H255ZM105 210.778H120V271H105V210.778ZM45 105.389V135.5H15V120.444H0V105.389H45ZM105 60.2222H120V75.2778H105V60.2222ZM150 15.0556V45.1667H135V0H165V15.0556H150ZM105 15.0556H120V30.1111H105V15.0556ZM255 135.5H270V165.611H240V150.556H255V135.5ZM240 105.389V120.444H210V150.556H180V135.5H195V105.389H240ZM135 165.611H120V150.556H105V135.5H135V165.611ZM225 195.722H240V210.778H225V195.722ZM255 120.444V135.5H240V120.444H255ZM120 165.611V180.667H105V165.611H120ZM210 240.889H225V271H195V240.889H210ZM165 240.889H180V255.944H165V271H135V255.944H150V240.889H165ZM165 225.833V210.778H195V225.833H165ZM165 150.556H180V195.722H165V210.778H150V225.833H135V195.722H120V180.667H165V165.611H150V150.556H165ZM30 150.556V165.611H15V150.556H30ZM210 210.778H195V195.722H210V210.778ZM225 180.667H195V165.611H225V180.667ZM75 105.389H90V120.444H75V135.5H90V165.611H75V150.556H60V165.611H45V135.5H60V105.389H75ZM120 105.389V75.2778H165V120.444H135V105.389H150V90.3333H135V105.389H120ZM120 45.1667H135V60.2222H120V45.1667ZM105 105.389H120V120.444H105V105.389ZM150 60.2222V45.1667H165V60.2222H150Z" fill="black"/>
-                            </svg>
+                            <img src="../assets/Orchestrated By HIStory Mobile-Application.png" alt="qr-image">
                         </div>
                         <div class="qrButton">
-                            <button class="generate-btn">Generate QR Code</button>
-                            <button class="download-btn">Download QR Code</button>
+                            <button class="download-btn" id="downloadQR">Download QR Code</button>
                         </div>
                     </div>
+                </div>
+
+                <!-- Add this notification element if it doesn't exist -->
+                <div class="notification" id="notification" style="display: none;">
+                    QR Code downloaded successfully!
                 </div>
                 <!--===== Stats Dashboard =====-->
                 <!--===== Tab: Gallery =====-->

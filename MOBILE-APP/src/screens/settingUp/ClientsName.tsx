@@ -120,6 +120,7 @@ const ClientsName = () => {
                       <TextInput
                         style={styles.textInput}
                         placeholder="Enter your first name"
+                        placeholderTextColor="#999"
                         value={myName}
                         onChangeText={(text) => setMyName(text)}
                       />
@@ -144,6 +145,7 @@ const ClientsName = () => {
                       <TextInput
                         style={styles.textInput}
                         placeholder="Enter your first name"
+                        placeholderTextColor="#999"
                         value={partnerName}
                         onChangeText={(text) => setPartnerName(text)}
                       />
@@ -228,6 +230,7 @@ const styles = StyleSheet.create({
     height: hp("6.2%"),
     borderRadius: 50,
     marginTop: hp("1%"),
+    fontFamily: "Poppins",
     borderColor: colors.border,
     paddingHorizontal: wp("7%"),
     backgroundColor: colors.white,
@@ -274,9 +277,11 @@ const styles = StyleSheet.create({
   myNameText: {
     fontSize: wp("4.2%"),
     width: wp("100%"),
+    fontFamily: "Poppins",
   },
 
   enterName: {
+      fontFamily: "Poppins",
       alignItems: "center",
       justifyContent: "center",
   },

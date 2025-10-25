@@ -40,6 +40,14 @@ const ProgressBar = ({ progress }: { progress: number }) => {
  };
 
 const Home = () => {
+   const [fontsLoaded] = useFonts({
+      'Poppins': require('../../assets/fonts/Poppins-Regular.ttf'),
+      'Loviena': require('../../assets/fonts/lovienapersonaluseonlyregular-yy4pq.ttf'),
+      'Canela': require('../../assets/fonts/CanelaCondensed-Regular-Trial.otf'),
+      'Senbatsu': require('../../assets/fonts/Senbatsu.otf'),
+      'Velista': require('../../assets/fonts/VELISTA.ttf'),
+   });
+
    const navigation = useNavigation<HomeScreenNavigationProp>();
 
    type IconItem = {
@@ -121,29 +129,6 @@ const Home = () => {
     });
   };
 
-   // const testSecureStore = async () => {
-   //    try {
-   //       console.log('🧪 TESTING SECURESTORE...');
-         
-   //       // Test 1: Write test data
-   //       await SecureStore.setItemAsync('test_key', 'test_value');
-   //       console.log('✅ Test data written');
-         
-   //       // Test 2: Read immediately
-   //       const immediateRead = await SecureStore.getItemAsync('test_key');
-   //       console.log('✅ Immediate read:', immediateRead);
-         
-   //       // Test 3: Close and reopen app manually, then check this
-   //       const storedUserId = await SecureStore.getItemAsync('userId');
-   //       const storedEventData = await SecureStore.getItemAsync(`eventData_${storedUserId}`);
-   //       console.log('✅ UserId in storage:', storedUserId);
-   //       console.log('✅ EventData exists after restart:', !!storedEventData);
-         
-   //    } catch (error) {
-   //       console.error('❌ SecureStore test failed:', error);
-   //    }
-   // };
-
    return (
       <SafeAreaProvider>
          <SafeAreaView style={{ flex: 1 }}>
@@ -199,10 +184,7 @@ const Home = () => {
                   {/* COUNTDOWN */}
 
                   {/* ICON SECTION */}
-                  <LinearGradient
-                     colors={["#FFFFFF", "rgba(240, 240, 240, 0.25)"]}
-                     style={styles.iconSection}
-                  >
+                  <View style={styles.iconSection}>
                      <View style={styles.iconSectionContainer}>
                         {icons.map((item, index) => (
                            <TouchableOpacity
@@ -215,7 +197,7 @@ const Home = () => {
                            </TouchableOpacity>
                         ))}
                      </View>
-                  </LinearGradient>
+                  </View>
                   {/* ICON SECTION */}
 
                   {/* EVENT TYPE & DATE */}
@@ -246,7 +228,10 @@ const Home = () => {
                   <View style={styles.checkList}>
                      <View style={styles.checkListContainer}>
                         <Text style={styles.checkListText}>Checklist</Text>
-                        <TouchableOpacity style={styles.viewAll}>
+                        <TouchableOpacity 
+                            onPress={() => navigation.navigate("Checklist" as never)}
+                           style={styles.viewAll}
+                        >
                            <Text style={styles.viewAllText}>View All</Text>
                            <FontAwesomeIcon
                               icon={faChevronRight}
@@ -447,6 +432,7 @@ const styles = StyleSheet.create({
       fontWeight: "600",
       fontSize: wp("4%"),
       top: hp("0.5%"),
+      width: wp("100%")
    },
 
    weddingTypeContainer: {
@@ -522,8 +508,10 @@ const styles = StyleSheet.create({
    },
 
    checkListContainer: {
-      padding: wp("2%"),
       flexDirection: "row",
+      alignItems: 'center',
+      paddingVertical: hp("1%"),
+      paddingHorizontal: wp("2%"),
       justifyContent: "space-between",
    },
 
@@ -539,9 +527,11 @@ const styles = StyleSheet.create({
    },
 
    viewAllText: {
-      marginRight: wp("1%"),
+      margin: 0,
+      padding: 0,
       fontSize: wp("3.6%"),
       fontFamily: "Poppins",
+      marginRight: wp("1%"),
    },
 
    checkListLine: {
@@ -609,15 +599,18 @@ const styles = StyleSheet.create({
       color: "white",
       top: wp("10%"),
       fontWeight: "400",
+      width: wp("100%"),
+      textAlign: 'center',
       fontSize: wp("5.5%"),
-      position: "absolute",
       alignSelf: "center",
+      position: "absolute",
       fontFamily: "Loviena",
    },
 
    overlayTextBottom: {
       gap: 22,
       zIndex: 12,
+      fontFamily: "Poppins",
       marginTop: -hp("1%"),
       flexDirection: "row",
       position: "absolute",
@@ -780,6 +773,7 @@ const styles = StyleSheet.create({
       shadowRadius: 10,
       // Android
       elevation: 10,  
+      backgroundColor: colors.white,
    },
 
    iconSectionContainer: {
@@ -819,7 +813,7 @@ const styles = StyleSheet.create({
    
    notesText: {
       fontSize: wp("4%"),
-      color: colors.borderv4,
+      color: colors.black,
       fontFamily: "Loviena",
       marginLeft: wp("1%"),
       marginBottom: hp("1.5%"),
@@ -846,6 +840,7 @@ const styles = StyleSheet.create({
    },
 
    screenSectionText: {
+      width: wp("100%"),
       fontSize: wp("4%"),
       fontFamily: "Poppins",
    },

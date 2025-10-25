@@ -5,6 +5,7 @@ import { EventProvider } from './src/context/EventContext';
 import { RootStackParamList } from './src/screens/type';
 import { View, Text, StyleSheet } from 'react-native';
 
+
 {/* Get Started Screens */}
 import { LoadingScreen } from './src/screens/getstarted/Loadingpage';
 import GetStartedScreen from './src/screens/getstarted/Getstarted';
@@ -52,6 +53,8 @@ import { GuestSvg } from './src/screens/icons/svg/GuestSvg';
 import { ScheduleSvg } from './src/screens/icons/svg/ScheduleSvg';
 import { PaymentSvg } from './src/screens/icons/svg/PaymentSvg';
 import { AccountSvg } from './src/screens/icons/svg/AccountSvg';
+
+import { NotificationProvider } from './src/context/NotificationContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -104,86 +107,75 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
-// Debug Wrapper for Screens
-const withDebug = (Component: React.ComponentType<any>, name: string) => {
-  return (props: any) => {
-    console.log(`[DEBUG] Rendering screen: ${name}`);
-    try {
-      return <Component {...props} />;
-    } catch (error) {
-      console.log(`[DEBUG ERROR] In screen ${name}:`, error);
-      throw error;
-    }
-  };
-};
-
 export default function App() {
   return (
-        <ErrorBoundary>
-      <EventProvider>
-        <NavigationContainer>
-          <Stack.Navigator
-            initialRouteName="Loading"
-            screenOptions={{
-              headerShown: false,
-              animation: "fade"
-            }}
-          >
-            {/* Get Started Screens */}
-            <Stack.Screen name="Loading" component={LoadingScreen} />
-            <Stack.Screen name="GetStarted" component={GetStartedScreen} /> 
+      <ErrorBoundary>
+        <EventProvider>
+          <NotificationProvider>
+          <NavigationContainer>
+            <Stack.Navigator
+              initialRouteName="Loading"
+              screenOptions={{
+                headerShown: false,
+                animation: "fade"
+              }}
+            >
+              {/* Get Started Screens */}
+              <Stack.Screen name="Loading" component={LoadingScreen} />
+              <Stack.Screen name="GetStarted" component={GetStartedScreen} /> 
 
-            {/* Auth */}
-            <Stack.Screen name="SignIn" component={SignIn} />
-            <Stack.Screen name="SignUp" component={SignUp} />
-            <Stack.Screen name="ForgotPass" component={ForgotPass} />
-            <Stack.Screen name="SendCode" component={SendCode} />
-            <Stack.Screen name="ResetPass" component={ResetPass} />
+              {/* Auth */}
+              <Stack.Screen name="SignIn" component={SignIn} />
+              <Stack.Screen name="SignUp" component={SignUp} />
+              <Stack.Screen name="ForgotPass" component={ForgotPass} />
+              <Stack.Screen name="SendCode" component={SendCode} />
+              <Stack.Screen name="ResetPass" component={ResetPass} />
 
-            {/* Setting Up */}
-            <Stack.Screen name="ChooseEvent" component={ChooseEvent} />
-            <Stack.Screen name="ClientsName" component={ClientsName} />
-            <Stack.Screen name="EventDate" component={EventDate} />
-            <Stack.Screen name="EventPrice" component={EventPrice} />
-            <Stack.Screen name="CompanyPolicy" component={CompanyPolicy} />
+              {/* Setting Up */}
+              <Stack.Screen name="ChooseEvent" component={ChooseEvent} />
+              <Stack.Screen name="ClientsName" component={ClientsName} />
+              <Stack.Screen name="EventDate" component={EventDate} />
+              <Stack.Screen name="EventPrice" component={EventPrice} />
+              <Stack.Screen name="CompanyPolicy" component={CompanyPolicy} />
 
-            {/* Home Wedding */}
-            <Stack.Screen name="Home" component={Home} />
-            <Stack.Screen name="Event" component={Event} />
-            <Stack.Screen name="Schedule" component={Schedule} />
-            <Stack.Screen name="Guest" component={Guest} />
-            <Stack.Screen name="Budget" component={Budget} />
-            <Stack.Screen name="Checklist" component={Checklist} />
-            <Stack.Screen name="Gallery" component={Gallery} />
-            <Stack.Screen name="Account" component={Account} />
-            <Stack.Screen name="Notification" component={Notification} />
-            <Stack.Screen name="Payment" component={Payment} />
-            <Stack.Screen name="ESignature" component={ESignature} />
-            
-            {/* Icons */}
-            <Stack.Screen name="HomeIcon" component={HomeIcon} />
-            <Stack.Screen name="EventIcon" component={EventIcon} />
-            <Stack.Screen name="GuestIcon" component={GuestIcon} />
-            <Stack.Screen name="ScheduleIcon" component={ScheduleIcon} />
-            <Stack.Screen name="BudgetIcon" component={BudgetIcon} />
-            <Stack.Screen name="ESignatureIcon" component={ESignatureIcon} />
-            <Stack.Screen name="ChecklistIcon" component={ChecklistIcon} />
+              {/* Home Wedding */}
+              <Stack.Screen name="Home" component={Home} />
+              <Stack.Screen name="Event" component={Event} />
+              <Stack.Screen name="Schedule" component={Schedule} />
+              <Stack.Screen name="Guest" component={Guest} />
+              <Stack.Screen name="Budget" component={Budget} />
+              <Stack.Screen name="Checklist" component={Checklist} />
+              <Stack.Screen name="Gallery" component={Gallery} />
+              <Stack.Screen name="Account" component={Account} />
+              <Stack.Screen name="Notification" component={Notification} />
+              <Stack.Screen name="Payment" component={Payment} />
+              <Stack.Screen name="ESignature" component={ESignature} />
+              
+              {/* Icons */}
+              <Stack.Screen name="HomeIcon" component={HomeIcon} />
+              <Stack.Screen name="EventIcon" component={EventIcon} />
+              <Stack.Screen name="GuestIcon" component={GuestIcon} />
+              <Stack.Screen name="ScheduleIcon" component={ScheduleIcon} />
+              <Stack.Screen name="BudgetIcon" component={BudgetIcon} />
+              <Stack.Screen name="ESignatureIcon" component={ESignatureIcon} />
+              <Stack.Screen name="ChecklistIcon" component={ChecklistIcon} />
 
-            <Stack.Screen name="EventSvg" component={EventSvg} />
-            <Stack.Screen name="ChecklistSvg" component={ChecklistSvg} />
-            <Stack.Screen name="BudgetSvg" component={BudgetSvg} />
-            <Stack.Screen name="GuestSvg" component={GuestSvg} />
-            <Stack.Screen name="ScheduleSvg" component={ScheduleSvg} />
-            <Stack.Screen name="PaymentSvg" component={PaymentSvg} />
-            <Stack.Screen name="ESignatureSvg" component={ESignatureSvg} />
-            <Stack.Screen name="AccountSvg" component={AccountSvg} />
+              <Stack.Screen name="EventSvg" component={EventSvg} />
+              <Stack.Screen name="ChecklistSvg" component={ChecklistSvg} />
+              <Stack.Screen name="BudgetSvg" component={BudgetSvg} />
+              <Stack.Screen name="GuestSvg" component={GuestSvg} />
+              <Stack.Screen name="ScheduleSvg" component={ScheduleSvg} />
+              <Stack.Screen name="PaymentSvg" component={PaymentSvg} />
+              <Stack.Screen name="ESignatureSvg" component={ESignatureSvg} />
+              <Stack.Screen name="AccountSvg" component={AccountSvg} />
 
-            <Stack.Screen name="NavigationSlider" component={NavigationSlider} />
-            
-          </Stack.Navigator>
-        </NavigationContainer>
-      </EventProvider>
-    </ErrorBoundary>
+              <Stack.Screen name="NavigationSlider" component={NavigationSlider} />
+              
+            </Stack.Navigator>
+          </NavigationContainer>
+          </NotificationProvider>
+        </EventProvider>
+      </ErrorBoundary>
   );
 }
 

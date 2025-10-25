@@ -35,6 +35,7 @@ interface Expense {
 }
 
 interface EventContextType {
+    userId: string | null;
     eventData: Record<string, any>;
     updateEvent: (key: string, value: any) => Promise<void>;
     saveEventToBackend: () => Promise<void>;
@@ -612,6 +613,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   return (
     <EventContext.Provider
       value={{
+        userId: currentUserId,
         eventData,
         updateEvent,
         eventStatus,

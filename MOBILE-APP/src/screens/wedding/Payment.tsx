@@ -173,10 +173,15 @@ const Payment = () => {
 
               <View style={styles.divider}></View>
 
-              <View>
-                <Text style={styles.paymentHeaderTitle}>GCash account to send to:</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.paymentHeaderTitle}>GCash Account:</Text>
                 <Text style={styles.paymentSubText}>{reminder.gcash_name}</Text>
-                <Text style={styles.paymentHeaderTitle}>{reminder.gcash_number}</Text>
+              </View>
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={styles.paymentHeaderTitle}>GCash Number:</Text>
+                  <Text style={styles.paymentHeaderTitle}>{reminder.gcash_number}</Text>
+                </View>
                 <TouchableOpacity style={styles.gcashBtn} onPress={() => {}}>
                   <Text style={styles.gcashBtnText}>Open GCash</Text>
                 </TouchableOpacity>
@@ -269,8 +274,7 @@ const styles = StyleSheet.create({
     },
 
     paymentHeaderTitle: {
-        fontWeight: "600",
-        fontSize: wp("4.4%"),
+        fontSize: wp("4%"),
         paddingBottom: hp("0.5%"),
     },
 
@@ -280,7 +284,8 @@ const styles = StyleSheet.create({
     },
 
     paymentSubText: {
-        fontSize: wp("4.2%"),
+        fontSize: wp("3.5%"),
+        fontFamily: 'Poppins',
     },
 
     paymentMethod: {
@@ -289,13 +294,15 @@ const styles = StyleSheet.create({
     },
 
     gcashText: {
-        fontSize: wp("4.5%"),
+        fontSize: wp("3.5%"),
+        fontFamily: 'Poppins',
         color: colors.facebookBtn,
     },
 
     deadlineText: {
         color: colors.red,
-        fontSize: wp("4.5%"),
+        fontSize: wp("3.5%"),
+        fontFamily: 'Poppins',
     },
 
     gcashBtn: {
@@ -304,13 +311,14 @@ const styles = StyleSheet.create({
         marginTop: hp("1.5%"),
         marginBottom: hp("0.8%"),
         justifyContent: "center",
-        paddingVertical: hp("1.5%"),
+        paddingVertical: hp("1.2%"),
         backgroundColor: colors.facebookBtn,
-    },
+    }, 
 
     gcashBtnText: {
         color: colors.white,
-        fontSize: wp("4.5%"),
+        fontSize: wp("4.2%"),
+        fontFamily: 'Poppins'
     },
 
     pendingText: {
@@ -331,10 +339,11 @@ const styles = StyleSheet.create({
         borderWidth: 0.5,
         borderRadius: 12,
         marginTop: hp("1%"),
-        fontSize: wp("4.5%"),
+        fontSize: wp("4%"),
         paddingLeft: wp("5%"),
         color: colors.borderv3,
-        paddingVertical: hp("1.5%"),
+        fontFamily: 'Poppins',
+        paddingVertical: hp("1.2%"),
         borderColor: colors.borderv4,
     },
 
@@ -357,13 +366,14 @@ const styles = StyleSheet.create({
     uploadText: {
         fontSize: 16,
         fontWeight: '500',
+        fontFamily: 'Poppins',
         color: colors.facebookBtn,
     },
 
     uploadSubtext: {
         fontSize: 12,
         color: '#666',
-        marginTop: 4,
+        fontFamily: 'Poppins',
     },
 
     imagePreviewContainer: {
@@ -379,19 +389,32 @@ const styles = StyleSheet.create({
     },
 
     removeButton: {
-        position: 'absolute',
         top: 10,
         right: 10,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        borderRadius: 15,
         width: 30,
         height: 30,
+        borderRadius: 15,
+        position: 'absolute',
         alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
     },
 
     removeButtonText: {},
-    uploadButtonText: {},
+
+    uploadButtonText: {
+        width: wp("80%"),
+        borderRadius: 12,
+        marginTop: hp("2%"),
+        color: colors.white,
+        alignItems: "center",
+        textAlign: 'center',
+        fontFamily: 'Poppins',
+        justifyContent: "center",
+        paddingVertical: hp("1.4%"),
+        backgroundColor: '#4CAF50',
+    },
+    
     uploadButtonDisabled: {},
 });
 
