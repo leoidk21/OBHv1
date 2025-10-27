@@ -176,11 +176,15 @@ const NavigationSlider: React.FC<{ headerTitle?: string }> = ({ headerTitle }) =
             )}
           </TouchableOpacity>
 
-          <Image
-            resizeMode="contain"
-            style={styles.notifAccPng}
-            source={require("../../../assets/account.png")}
-          />
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Account' as never)}
+          >
+            <Image
+              resizeMode="contain"
+              style={styles.notifAccPng}
+              source={require("../../../assets/account.png")}
+            />
+            </TouchableOpacity>
         </View>
       </View>
       {/* HEADER */}

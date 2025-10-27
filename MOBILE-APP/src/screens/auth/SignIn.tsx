@@ -89,33 +89,6 @@ const SignIn = () => {
     }
   };
 
-  // const debugCurrentStorage = async () => {
-  //   const userId = await SecureStore.getItemAsync('userId');
-  //   if (userId) {
-  //     const stored = await AsyncStorage.getItem(`eventData_${userId}`);
-  //     console.log('=== CURRENT STORAGE STATE ===');
-  //     console.log('Total keys:', stored ? Object.keys(JSON.parse(stored)).length : 0);
-  //     console.log('All keys:', stored ? Object.keys(JSON.parse(stored)) : []);
-  //     console.log('=============================');
-  //   }
-  // };
-
-  // const checkAllUsers = async () => {
-  //   console.log('🔍 CHECKING ALL USERS IN ASYNCSTORAGE:');
-    
-  //   // Get all keys from AsyncStorage
-  //   const allKeys = await AsyncStorage.getAllKeys();
-  //   const eventDataKeys = allKeys.filter(key => key.startsWith('eventData_'));
-    
-  //   console.log('📋 Users with event data:', eventDataKeys);
-    
-  //   for (const key of eventDataKeys) {
-  //     const data = await AsyncStorage.getItem(key);
-  //     const parsed = JSON.parse(data || '{}');
-  //     console.log(`👤 ${key}:`, Object.keys(parsed).length, 'keys');
-  //   }
-  // };
-
   return (
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1 }}>
@@ -240,7 +213,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     borderWidth: 1,
     width: wp('80%'),
-    fontSize: wp('4%'),
+    fontSize: wp('3.6%'),
     borderRadius: wp('10%'),
     borderColor: colors.border,
     paddingHorizontal: wp('5%'),

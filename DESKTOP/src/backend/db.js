@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+require('dotenv').config();
 
 console.log('🔧 Debug - Environment variables in db.js:');
 console.log('DB_USER:', process.env.DB_USER || 'UNDEFINED');
@@ -12,17 +13,22 @@ const pool = new Pool({
   host: process.env.DB_HOST,
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-  ssl: { rejectUnauthorized: false }
+  port: process.env.DB_PORT || 6543, // Supabase Pooler port
+  ssl: { rejectUnauthorized: false },
+  max: 5, // limit connections to avoid overload
 });
 
-// Test connection
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('❌ Database connection failed:', err.message);
-  } else {
-    console.log('✅ Connected to Supabase Session Pooler at:', res.rows[0].now);
-  }
+pool.on('error', (err) => {
+  console.error('⚠️ Unexpected database error:', err.message);
 });
+
+(async () => {
+  try {
+    const res = await pool.query('SELECT NOW()');
+    console.log('✅ Connected to Supabase Pooler at:', res.rows[0].now);
+  } catch (err) {
+    console.error('❌ Database connection failed:', err.message);
+  }
+})();
 
 module.exports = pool;

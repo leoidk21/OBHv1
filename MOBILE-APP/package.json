@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
     "@fortawesome/fontawesome": "^1.1.8",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-native-fontawesome": "^0.3.2",
@@ -27,6 +28,7 @@
     "expo": "54.0.17",
     "expo-asset": "~12.0.8",
     "expo-auth-session": "^7.0.8",
+    "expo-clipboard": "~8.0.7",
     "expo-constants": "~18.0.10",
     "expo-font": "~14.0.8",
     "expo-image-picker": "~17.0.8",

@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform, Alert, Share } from 'react-native';
+import * as Clipboard from 'expo-clipboard'; // For Expo
 
 const API_BASE = "https://ela-untraceable-foresakenly.ngrok-free.dev/api";
 
@@ -66,8 +68,11 @@ interface EventContextType {
 
     eventStatus: string;
     refreshEventStatus: () => Promise<void>;
-    
     recoverEventData: () => Promise<boolean>;
+
+    generateInviteLink: (guestId: string, guestName: string) => Promise<string>;
+    copyToClipboard: (text: string) => void;
+    shareViaMessenger: (link: string) => void;
 }
 
 const EventContext = createContext<EventContextType | undefined>(undefined);
@@ -76,7 +81,6 @@ interface EventProviderProps {
   children: ReactNode;
 }
 
-// 🚀 ENHANCED: Proper mutex lock for storage operations
 class StorageMutex {
   private locks: Map<string, Promise<any>> = new Map();
 
@@ -113,7 +117,191 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
   const dataVersion = useRef(0);
 
-  // 🚀 ENHANCED: User session validation
+  const getCurrentEventId = async (): Promise<string | null> => {
+    try {
+      const session = await validateUserSession();
+      if (!session) return null;
+
+      const { token } = session;
+      
+      // Get approved events for this user
+      const response = await fetch(`${API_BASE}/event-plans/approved/guests`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📋 Approved events:', data.events);
+        
+        if (data.events && data.events.length > 0) {
+          // Return the first approved event ID
+          const eventId = data.events[0].id;
+          console.log('✅ Using event ID:', eventId);
+          return eventId.toString();
+        }
+      }
+      
+      console.log('❌ No approved events found');
+      return null;
+    } catch (error) {
+      console.error('Error getting event ID:', error);
+      return null;
+    }
+  };
+
+// In EventContext.tsx - REPLACE THE generateInviteLink FUNCTION
+const generateInviteLink = async (guestId: string, guestName: string): Promise<string> => {
+  try {
+    const session = await validateUserSession();
+    if (!session) throw new Error("Not authenticated");
+
+    const { token } = session;
+    
+    console.log('🔍 DEBUG - Current eventData:', JSON.stringify(eventData, null, 2));
+    
+    // 🚨 CRITICAL FIX: Get the LATEST submitted event ID
+    let eventId = await getLatestSubmittedEventId(token);
+    
+    if (!eventId) {
+      throw new Error("No submitted event found. Please make sure your event is submitted and approved first.");
+    }
+
+    console.log('🚀 Generating link for LATEST EVENT:', { eventId, guestId, guestName });
+
+    const response = await fetch(`${API_BASE}/event-plans/${eventId}/guests/${guestId}/generate-invite`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        guestName: guestName
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Server response:', response.status, errorText);
+      throw new Error(`Failed to generate invitation link: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Link generated for correct event:', eventId);
+    return data.embeddedLink || data.inviteLink;
+    
+  } catch (error) {
+    console.error('Generate invite error:', error);
+    throw error;
+  }
+};
+
+// 🆕 ADD THIS FUNCTION: Get the LATEST submitted event
+const getLatestSubmittedEventId = async (token: string): Promise<string | null> => {
+  try {
+    console.log('🔄 Fetching latest submitted events...');
+    
+    // Get ALL events for this user, sorted by most recent
+    const response = await fetch(`${API_BASE}/event-plans`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('📋 All user events:', data.event_plans);
+      
+      if (data.event_plans && data.event_plans.length > 0) {
+        // Sort by submitted_at descending to get the most recent
+        const sortedEvents = data.event_plans.sort((a: any, b: any) => 
+          new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
+        );
+        
+        const latestEvent = sortedEvents[0];
+        console.log('🎯 LATEST EVENT FOUND:', {
+          id: latestEvent.id,
+          client_name: latestEvent.client_name,
+          event_date: latestEvent.event_date,
+          status: latestEvent.status,
+          submitted_at: latestEvent.submitted_at
+        });
+        
+        return latestEvent.id.toString();
+      }
+    }
+    
+    console.log('❌ No events found for user');
+    return null;
+  } catch (error) {
+    console.error('Error fetching latest event:', error);
+    return null;
+  }
+};
+
+// 🆕 ADD THIS FUNCTION TOO: Get only APPROVED events
+const getLatestApprovedEventId = async (token: string): Promise<string | null> => {
+  try {
+    console.log('🔄 Fetching approved events...');
+    
+    const response = await fetch(`${API_BASE}/event-plans/approved/guests`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('📋 Approved events:', data.events);
+      
+      if (data.events && data.events.length > 0) {
+        // Get the most recent approved event
+        const latestApproved = data.events.sort((a: any, b: any) => 
+          new Date(b.event_date).getTime() - new Date(a.event_date).getTime()
+        )[0];
+        
+        console.log('🎯 LATEST APPROVED EVENT:', latestApproved);
+        return latestApproved.id.toString();
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching approved events:', error);
+    return null;
+  }
+};
+
+  const copyToClipboard = async (text: string): Promise<void> => {
+    try {
+      // React Native only - using expo-clipboard
+      await Clipboard.setStringAsync(text);
+      console.log('Copied to clipboard:', text);
+    } catch (error) {
+      console.error('Copy to clipboard error:', error);
+      throw error;
+    }
+  };
+
+  const shareViaMessenger = async (link: string, guestName?: string): Promise<void> => {
+    try {
+      const message = guestName 
+        ? `${guestName}, you're invited to our wedding! 🎉 Click here to RSVP: ${link}`
+        : `You're invited to our wedding! 🎉 Click here to RSVP: ${link}`;
+
+      // React Native - use Share API (CORRECTED - only one parameter)
+      await Share.share({
+        message: message,
+        title: 'Wedding Invitation'
+        // Remove the url property as it's not needed for basic sharing
+      });
+    } catch (error) {
+      console.error('Share error:', error);
+      throw error;
+    }
+  };
+
   const validateUserSession = async (): Promise<{userId: string, token: string} | null> => {
     try {
       const userId = await SecureStore.getItemAsync("userId");
@@ -635,6 +823,9 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         recoverEventData,
         clearAllUserData,
         resetEventState,
+        generateInviteLink,
+        copyToClipboard,
+        shareViaMessenger,
       }}
     >
       {children}

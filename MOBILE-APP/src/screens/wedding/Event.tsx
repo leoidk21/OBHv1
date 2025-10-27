@@ -487,8 +487,6 @@ const Event = () => {
                                 </View>
                             </View>
 
-                            
-                            
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>Event Details:</Text>
                                 <Text style={styles.fields}>Event Type: {eventData.event_type || 'Not set'}</Text>
@@ -527,7 +525,7 @@ const Event = () => {
                             </View>
 
                             {/* ADD ACTION BUTTONS HERE */}
-                            {(eventStatus === 'Pending' || eventStatus === 'Approved') && (
+                            {/* {(eventStatus === 'Pending' || eventStatus === 'Approved') && (
                                 <View style={styles.actionButtonsContainer}>
                                     <TouchableOpacity 
                                         style={[
@@ -542,7 +540,7 @@ const Event = () => {
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
-                            )}
+                            )} */}
                         </ScrollView>
                     </>
                 )}
@@ -659,7 +657,6 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: hp("1.5%"),
         alignItems: "center",
-        marginRight: wp("2%"),
         borderRadius: wp("2%"),
         marginHorizontal: wp("5%"),
         marginTop: hp("1%"),

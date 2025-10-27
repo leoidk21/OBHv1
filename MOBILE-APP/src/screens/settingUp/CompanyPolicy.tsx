@@ -499,13 +499,12 @@ const styles = StyleSheet.create({
     modalTitle: {
       fontSize: 24,
       textAlign: 'center',
-      fontFamily: "Poppins",
     },
     
     modalSubtitle: {
-      marginTop: 5,
       fontSize: 16,
       color: '#666',
+      marginTop: hp("1%"),
       textAlign: 'center',
       fontFamily: "Poppins",
     },
@@ -518,6 +517,8 @@ const styles = StyleSheet.create({
       padding: 15,
       borderRadius: 10,
       marginBottom: 20,
+      borderWidth: 1,
+      borderColor: colors.border, 
       backgroundColor: '#f8f9fa',
     },
     
@@ -567,9 +568,9 @@ const styles = StyleSheet.create({
     nextStepsSection: {
       padding: 15,
       borderRadius: 10,
-      borderLeftWidth: 4,
+      borderWidth: 1,
+      borderColor: colors.border,     
       backgroundColor: '#f8f9fa',
-      borderLeftColor: colors.brown,
     },
     
     nextStepsTitle: {
@@ -605,7 +606,7 @@ const styles = StyleSheet.create({
     
     modalButtonSecondary: {
       flex: 1,
-      padding: 15,
+      padding: 12,
       borderRadius: 10,
       backgroundColor: '#f0f0f0',
       alignItems: 'center',
@@ -613,13 +614,13 @@ const styles = StyleSheet.create({
     
     modalButtonSecondaryText: {
       color: '#666',
-      fontSize: 16,
+      fontFamily: 'Poppins',
       fontWeight: '600',
     },
     
     modalButtonPrimary: {
       flex: 1,
-      padding: 15,
+      padding: 12,
       borderRadius: 10,
       backgroundColor: colors.brown,
       alignItems: 'center',
@@ -627,8 +628,7 @@ const styles = StyleSheet.create({
     
     modalButtonPrimaryText: {
       color: '#ffffff',
-      fontSize: 16,
-      fontWeight: 'bold',
+      fontFamily: 'Poppins',
     },
 });
 

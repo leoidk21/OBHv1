@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets  } from "react-native-safe-area-context";
-import { Animated, StyleSheet, Text, View, Image, TouchableOpacity, ScrollView } from "react-native";
+import { Animated, StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Modal } from "react-native";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp} from "react-native-responsive-screen";
 import { useFonts } from "expo-font";
 import colors from "../config/colors";
@@ -27,107 +27,191 @@ import { PaymentSvg } from "../icons/svg/PaymentSvg";
 import { AccountSvg } from "../icons/svg/AccountSvg";
 
 import { useEvent } from '../../context/EventContext';
+import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 
-type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+   type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const ProgressBar = ({ progress }: { progress: number }) => {
-   return (
-     <View style={styles.progressBarContainer}>
-       <View style={[styles.progressBar, { width: `${progress}%` }]} />
-     </View>
-   );
- };
-
-const Home = () => {
-   const [fontsLoaded] = useFonts({
-      'Poppins': require('../../assets/fonts/Poppins-Regular.ttf'),
-      'Loviena': require('../../assets/fonts/lovienapersonaluseonlyregular-yy4pq.ttf'),
-      'Canela': require('../../assets/fonts/CanelaCondensed-Regular-Trial.otf'),
-      'Senbatsu': require('../../assets/fonts/Senbatsu.otf'),
-      'Velista': require('../../assets/fonts/VELISTA.ttf'),
-   });
-
-   const navigation = useNavigation<HomeScreenNavigationProp>();
-
-   type IconItem = {
-      label: string;
-      image: any;
-      route: keyof RootStackParamList;
-   }
-
-   const icons: IconItem[] = [
-      { label: "Event", image: EventSvg, route: "Event" },
-      { label: "Checklist", image: ChecklistSvg, route: "Checklist" },
-      { label: "Schedule", image: ScheduleSvg, route: "Schedule" },
-      { label: "Budget", image: BudgetSvg, route: "Budget" },
-      { label: "Guest", image: GuestSvg, route: "Guest" },
-      { label: "Payment", image: PaymentSvg, route: "Payment" },
-      { label: "ESignature", image: ESignatureSvg, route: "ESignature" },
-      { label: "Account", image: AccountSvg, route: "Account" },
-   ];
-
-   const [progress, setProgress] = useState(0);
-
-   const [checkboxes, setcheckboxes] = useState({
-      checklist1: false,
-      checklist2: false,
-      checklist3: false,
-   });
-
-   useEffect(() => {
-      const checkedCount = Object.values(checkboxes).filter(checked => checked).length;
-      const total = Object.keys(checkboxes).length;
-      setProgress((checkedCount / total) * 100);
-   }, [checkboxes]);
-
-   const toggleCheckbox = (key: keyof typeof checkboxes) => {
-      setcheckboxes(prev => ({
-         ...prev,
-         [key]: !prev[key]
-      }));
+   const ProgressBar = ({ progress }: { progress: number }) => {
+      return (
+      <View style={styles.progressBarContainer}>
+         <View style={[styles.progressBar, { width: `${progress}%` }]} />
+      </View>
+      );
    };
 
-   const { eventData, debugStorageKeys, loadEventData } = useEvent();
-   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+   const Home = () => {
+      const [fontsLoaded] = useFonts({
+         'Poppins': require('../../assets/fonts/Poppins-Regular.ttf'),
+         'Loviena': require('../../assets/fonts/lovienapersonaluseonlyregular-yy4pq.ttf'),
+         'Canela': require('../../assets/fonts/CanelaCondensed-Regular-Trial.otf'),
+         'Senbatsu': require('../../assets/fonts/Senbatsu.otf'),
+         'Velista': require('../../assets/fonts/VELISTA.ttf'),
+      });
 
-   useEffect(() => {
-    if (eventData.event_date) {
-      const updateCountdown = () => {
-        const now = new Date().getTime();
-        const eventTime = new Date(eventData.event_date).getTime();
-        const difference = eventTime - now;
+      const navigation = useNavigation<HomeScreenNavigationProp>();
+      const { eventData, debugStorageKeys, loadEventData } = useEvent();
 
-        if (difference <= 0) {
-          setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-          return;
-        }
+      const [showReminderModal, setShowReminderModal] = useState(false);
+      const [ hasShownReminder, setHasShownReminder ] = useState(false);
 
-        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+      const isScheduleComplete = !!eventData.event_date;
+      const isGuestComplete = !!eventData.guest_range;
+      const isBudgetComplete = !!eventData.package_price;
+      const isSignatureComplete = !!eventData.signature;
 
-        setCountdown({ days, hours, minutes, seconds });
+      // Calculate overall completion percentage
+      const completionStatus = [
+         isScheduleComplete,
+         isGuestComplete, 
+         isBudgetComplete,
+         isSignatureComplete
+      ];
+      const completedCount = completionStatus.filter(Boolean).length;
+      const totalSections = completionStatus.length;
+      const completionPercentage = (completedCount / totalSections) * 100;
+
+      type IconItem = {
+         label: string;
+         image: any;
+         route: keyof RootStackParamList;
+      }
+
+      const icons: IconItem[] = [
+         { label: "Event", image: EventSvg, route: "Event" },
+         { label: "Checklist", image: ChecklistSvg, route: "Checklist" },
+         { label: "Schedule", image: ScheduleSvg, route: "Schedule" },
+         { label: "Budget", image: BudgetSvg, route: "Budget" },
+         { label: "Guest", image: GuestSvg, route: "Guest" },
+         { label: "Payment", image: PaymentSvg, route: "Payment" },
+         { label: "ESignature", image: ESignatureSvg, route: "ESignature" },
+         { label: "Account", image: AccountSvg, route: "Account" },
+      ];
+
+      const [progress, setProgress] = useState(0);
+      const [checkboxes, setcheckboxes] = useState({
+         checklist1: false,
+         checklist2: false,
+         checklist3: false,
+      });
+
+      // REMINDERS MODAL ONE DAY BEFORE EVENTS
+      useEffect(() => {
+         const checkEventReminder = async () => {
+            if (!eventData.event_date) return;
+
+            // Check if we've already shown the reminder for this event
+            const reminderShownKey = `reminder_shown_${eventData.event_date}`;
+            const hasShown = await SecureStore.getItemAsync(reminderShownKey);
+            
+            if (hasShown === 'true') {
+               setHasShownReminder(true);
+               return;
+            }
+
+            const now = new Date().getTime();
+            const eventTime = new Date(eventData.event_date).getTime();
+            const difference = eventTime - now;
+            
+            // Calculate days until event (3 days = 3 * 24 * 60 * 60 * 1000 ms)
+            const daysUntilEvent = Math.ceil(difference / (1000 * 60 * 60 * 24));
+            
+            // Show modal if event is within 3 days and hasn't shown reminder yet
+            if (daysUntilEvent <= 2 && daysUntilEvent > 0 && !hasShownReminder) {
+               setShowReminderModal(true);
+            // Mark reminder as shown for this event
+            await SecureStore.setItemAsync(reminderShownKey, 'true');
+               setHasShownReminder(true);
+            }
       };
 
-      updateCountdown();
-      const interval = setInterval(updateCountdown, 1000);
+    checkEventReminder();
+      }, [eventData.event_date, hasShownReminder]);
 
-      return () => clearInterval(interval);
-    }
-  }, [eventData.event_date]);
+      // CLOSE REMINDER MODAL
+      const handleCloseReminder = () => {
+         setShowReminderModal(false);
+      };
 
-  // Format date for display
-  const formatEventDate = (dateString: string) => {
-    if (!dateString) return 'Date not set';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
+      // NAVIGATE TO EVENT DETAILS SCREEN
+      const handleViewEventDetails = () => {
+         setShowReminderModal(false);
+         navigation.navigate("Event" as never);
+      };
+      // REMINDERS MODAL ONE DAY BEFORE EVENTS
+
+      useEffect(() => {
+         const checkedCount = Object.values(checkboxes).filter(checked => checked).length;
+         const total = Object.keys(checkboxes).length;
+         setProgress((checkedCount / total) * 100);
+      }, [checkboxes]);
+
+      const toggleCheckbox = (key: keyof typeof checkboxes) => {
+         setcheckboxes(prev => ({
+            ...prev,
+            [key]: !prev[key]
+         }));
+      };
+      
+      const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+      useEffect(() => {
+         if (eventData.event_date) {
+            const updateCountdown = () => {
+            const now = new Date().getTime();
+            const eventTime = new Date(eventData.event_date).getTime();
+            const difference = eventTime - now;
+
+            if (difference <= 0) {
+               setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+               return;
+            }
+
+            const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+            setCountdown({ days, hours, minutes, seconds });
+            };
+
+            updateCountdown();
+            const interval = setInterval(updateCountdown, 1000);
+
+            return () => clearInterval(interval);
+         }
+   }, [eventData.event_date]);
+
+   // Determine which info is missing
+   const missingDetails = {
+      client_name: !eventData.client_name,
+      partner_name: !eventData.partner_name,
+      event_type: !eventData.wedding_type,
+      event_date: !eventData.event_date,
+      guest_range: !eventData.guest_range,
+      package_price: !eventData.package_price,
+   };
+
+   // Format date for display
+   const formatEventDate = (dateString: string) => {
+      if (!dateString) return 'Date not set';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+         day: '2-digit',
+         month: '2-digit',
+         year: 'numeric'
+      });
+   }; 
+
+   const MissingInfoItem = ({ label, field }: { label: string, field: string }) => (
+      <TouchableOpacity
+         style={styles.missingItem}
+         onPress={() => navigation.navigate("ChooseEvent" as never)}
+      >
+         <Ionicons name="alert-circle-outline" size={18} color="red" />
+         <Text style={styles.missingText}>{label} not set — tap to setup</Text>
+      </TouchableOpacity>
+   );
 
    return (
       <SafeAreaProvider>
@@ -142,6 +226,54 @@ const Home = () => {
             </View>
             {/* HEADER */}
             <View>  
+
+            {/* REMINDER MODAL */}
+               <Modal
+               visible={showReminderModal}
+               onRequestClose={handleCloseReminder}
+               animationType="slide"
+               transparent={true}
+               >
+               <View style={styles.modalOverlay}>
+                  <View style={styles.modalContent}>
+                     <View style={styles.modalHeader}>
+                     <Ionicons name="calendar-outline" size={24} color="#102E50" />
+                     <Text style={styles.modalTitle}>Event Reminder</Text>
+                     </View>
+                     
+                     <Text style={styles.modalMessage}>
+                     Your {eventData.wedding_type || 'event'} is approaching! 
+                     You have {countdown.days} days until your special day.
+                     </Text>
+                     
+                     <View style={styles.modalEventDetails}>
+                     <Text style={styles.eventNames}>
+                        {eventData.client_name || 'Not set'} & {eventData.partner_name || 'Not set'}
+                     </Text>
+                     <Text style={styles.eventDate}>
+                        {formatEventDate(eventData.event_date)}
+                     </Text>
+                     </View>
+                     
+                     <View style={styles.modalButtons}>
+                     <TouchableOpacity
+                        style={[styles.modalButton, styles.secondaryButton]}
+                        onPress={handleCloseReminder}
+                     >
+                        <Text style={styles.secondaryButtonText}>Dismiss</Text>
+                     </TouchableOpacity>
+                     
+                     <TouchableOpacity
+                        style={[styles.modalButton, styles.primaryButton]}
+                        onPress={handleViewEventDetails}
+                     >
+                        <Text style={styles.primaryButtonText}>View Details</Text>
+                     </TouchableOpacity>
+                     </View>
+                  </View>
+               </View>
+               </Modal>
+
                <ScrollView
                      contentContainerStyle={{ 
                         flexGrow: 1,
@@ -159,7 +291,7 @@ const Home = () => {
                         <View style={styles.beforeImage} />
                         
                         <Text style={styles.overlayTextTop}>
-                           {eventData.client_name} & {eventData.partner_name}
+                           {eventData.client_name || 'Not set'} & {eventData.partner_name || 'Not set'}
                         </Text>
                         
                         <View style={styles.overlayTextBottom}>
@@ -210,10 +342,10 @@ const Home = () => {
                      </View> 
                      <View style={styles.weddingTypeContainer}>
                         <Text style={[styles.weddingType, styles.weddingTypeText]}>
-                           {eventData.wedding_type}
+                           {eventData.wedding_type || 'Event type not set'}
                         </Text>  
                         <Text style={styles.weddingType}>
-                           {eventData.client_name} & {eventData.partner_name}
+                           {eventData.client_name || 'Not set'} & {eventData.partner_name || 'Not set'}
                         </Text>
                      </View>
                      <View style={styles.eventDateContainer}>
@@ -224,8 +356,22 @@ const Home = () => {
                   </View>
                   {/* EVENT TYPE & DATE */}
 
+                  {/* MISSING INFO SECTION */}
+                  {Object.values(missingDetails).some(Boolean) && (
+                  <View style={styles.missingContainer}>
+                     <Text style={styles.missingHeader}>Missing Information</Text>
+                        {missingDetails.client_name && <MissingInfoItem label="Client name" field="client_name" />}
+                        {missingDetails.partner_name && <MissingInfoItem label="Partner name" field="partner_name" />}
+                        {missingDetails.event_type && <MissingInfoItem label="Event type" field="event_type" />}
+                        {missingDetails.event_date && <MissingInfoItem label="Event date" field="event_date" />}
+                        {missingDetails.guest_range && <MissingInfoItem label="Guest list" field="guest_range" />}
+                        {missingDetails.package_price && <MissingInfoItem label="Budget" field="package_price" />}
+                  </View>
+                  )}
+                  {/* END MISSING INFO SECTION */}
+
                   {/* CHECKLIST */}
-                  <View style={styles.checkList}>
+                  {/* <View style={styles.checkList}>
                      <View style={styles.checkListContainer}>
                         <Text style={styles.checkListText}>Checklist</Text>
                         <TouchableOpacity 
@@ -300,73 +446,106 @@ const Home = () => {
                         <ProgressBar progress={progress} />
                         <Text style={styles.progressText}>{Math.round(progress)}% Completed</Text>
                      </View>
-                  </View>
+                  </View> */}
                   {/* CHECKLIST */}
 
                   <View style={styles.notesContainer}>
                      <Text style={styles.notesText}>Complete required fields to submit.</Text>
 
-                     <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.scrollContainer}
+                  <ScrollView
+                     horizontal
+                     showsHorizontalScrollIndicator={false}
+                     contentContainerStyle={styles.scrollContainer}
+                  >
+                     {/* SCHEDULE */}
+                     <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.screenContainer}
+                        onPress={() => navigation.navigate("Schedule" as never)}
                      >
-                        <TouchableOpacity
-                           style={styles.screenContainer}
-                           // onPress={() => navigation.navigate("Schedule" as never)}
-                        >
-                           <View style={styles.screenSection}>
-                              <Text style={styles.screenSectionText}>Schedule</Text>
-                           </View>
+                        <View style={styles.screenSection}>
+                        <Text style={styles.screenSectionText}>Schedule</Text>
+                           {isScheduleComplete ? (
+                              <Ionicons name="checkmark-circle" size={18} color="green" />
+                           ) : (
+                              <Ionicons name="alert-circle" size={18} color="red" />
+                           )}
+                        </View>
                            <View style={styles.screenItem}>
                               <Text style={styles.screenItemText}>Wedding Ceremony</Text>
-                           <Text style={styles.screenItemText}>
+                              <Text style={styles.screenItemText}>
                               {formatEventDate(eventData.event_date)}
                            </Text>
-                           </View>
-                        </TouchableOpacity>
+                        </View>
+                     </TouchableOpacity>
 
-                        <TouchableOpacity
-                           style={styles.screenContainer}
-                           // onPress={() => navigation.navigate("Guest" as never)}
-                        >
-                           <View style={styles.screenSection}>
-                              <Text style={styles.screenSectionText}>Guests</Text>
-                           </View>
-                           <View style={styles.screenItem}>
-                              <Text style={styles.screenItemText}>Total Guests</Text>
-                           <Text style={styles.screenItemText}>{eventData.guest_range}</Text>
-                           </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                           style={styles.screenContainer}
-                           // onPress={() => navigation.navigate("Budget" as never)}
-                        >
-                           <View style={styles.screenSection}>
-                              <Text style={styles.screenSectionText}>Budget</Text>
-                           </View>
-                           <View style={styles.screenItem}>
-                              <Text style={styles.screenItemText}>Total Budget</Text>
+                     {/* GUESTS */}
+                     <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.screenContainer}
+                        onPress={() => navigation.navigate("Guest" as never)}
+                     >
+                        <View style={styles.screenSection}>
+                        <Text style={styles.screenSectionText}>Guests</Text>
+                           {isGuestComplete ? (
+                              <Ionicons name="checkmark-circle" size={18} color="green" />
+                           ) : (
+                              <Ionicons name="alert-circle" size={18} color="red" />
+                           )}
+                        </View>
+                        <View style={styles.screenItem}>
+                           <Text style={styles.screenItemText}>Total Guests</Text>
                            <Text style={styles.screenItemText}>
-                              {eventData.package_price}
+                              {eventData.guest_range || 'Not set'} Pax
                            </Text>
-                           </View>
-                        </TouchableOpacity>
+                        </View>
+                     </TouchableOpacity>
 
-                        <TouchableOpacity
-                           style={styles.screenContainer}
-                           // onPress={() => navigation.navigate("ESignature" as never)}
-                        >
-                           <View style={styles.screenSection}>
-                              <Text style={styles.screenSectionText}>E-Signature</Text>
-                           </View>
-                           <View style={styles.screenItem}>
-                              <Text style={styles.screenItemText}></Text>
-                           </View>
-                        </TouchableOpacity>
-                     </ScrollView>
-                  </View>
+                     {/* BUDGET */}
+                     <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.screenContainer}
+                        onPress={() => navigation.navigate("Budget" as never)}
+                     >
+                        <View style={styles.screenSection}>
+                        <Text style={styles.screenSectionText}>Budget</Text>
+                        {isBudgetComplete ? (
+                           <Ionicons name="checkmark-circle" size={18} color="green" />
+                        ) : (
+                           <Ionicons name="alert-circle" size={18} color="red" />
+                        )}
+                        </View>
+                        <View style={styles.screenItem}>
+                           <Text style={styles.screenItemText}>Total Budget</Text>
+                           <Text style={styles.screenItemText}>
+                              {eventData.package_price ? `${eventData.package_price}` : 'Not set'}
+                           </Text>
+                        </View>
+                     </TouchableOpacity>
+
+                     {/* E-SIGNATURE */}
+                     <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.screenContainer}
+                        onPress={() => navigation.navigate("ESignature" as never)}
+                     >
+                        <View style={styles.screenSection}>
+                        <Text style={styles.screenSectionText}>E-Signature</Text>
+                           {isSignatureComplete ? (
+                              <Ionicons name="checkmark-circle" size={18} color="green" />
+                           ) : (
+                              <Ionicons name="alert-circle" size={18} color="red" />
+                           )}
+                        </View>
+                        <View style={styles.screenItem}>
+                           <Text style={styles.screenItemText}>
+                              {isSignatureComplete ? 'Signed' : 'Not signed'}
+                           </Text>
+                        </View>
+                     </TouchableOpacity>
+                  </ScrollView>
+               </View>
+
                </ScrollView>
             </View>
             </LinearGradient>
@@ -871,6 +1050,114 @@ const styles = StyleSheet.create({
    scrollContainer: {
       gap: 10,
    },
+
+   missingContainer: {
+      backgroundColor: colors.white,
+      paddingVertical: hp("1%"),
+      paddingHorizontal: wp("5%"),
+      marginHorizontal: wp("4.5%"),
+      marginTop: hp("2%"),
+      borderRadius: wp("2%"),
+      borderWidth: 1,
+      borderColor: "#f5c6cb",
+   },
+
+   missingHeader: {
+      fontFamily: "Poppins",
+      fontWeight: "600",
+      color: "red",
+      fontSize: wp("4%"),
+      marginBottom: hp("0.5%"),
+   },
+
+   missingItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: hp("0.5%"),
+   },
+
+   missingText: {
+      marginLeft: wp("2%"),
+      fontFamily: "Poppins",
+      color: "gray",
+      fontSize: wp("3.4%"),
+   },
+
+     modal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+
+    modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    minHeight: 300,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginLeft: 10,
+    color: '#102E50',
+  },
+  modalMessage: {
+    fontSize: 16,
+    lineHeight: 22,
+    marginBottom: 20,
+    color: '#333',
+  },
+  modalEventDetails: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  eventNames: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#102E50',
+    marginBottom: 5,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  primaryButton: {
+    backgroundColor: '#102E50',
+  },
+  secondaryButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  secondaryButtonText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+
 });
 
 export default Home;

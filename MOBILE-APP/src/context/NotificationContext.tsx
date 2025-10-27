@@ -184,6 +184,74 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, [userId]);
 
+  // Update your real-time subscription
+  useEffect(() => {
+    if (!userId) {
+      console.log('❌ No userId for real-time subscription');
+      return;
+    }
+
+    console.log('🎯 Setting up real-time for user:', userId);
+    refreshNotifications(); // Initial fetch
+
+    const subscription = supabase
+      .channel(`user-${userId}-notifications`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('📢 REAL-TIME: New notification received:', payload.new);
+          const newNotification = payload.new as Notification;
+          
+          // Add to notifications list
+          setNotifications(prev => [newNotification, ...prev]);
+          
+          // Increment unread count if not read
+          if (!newNotification.is_read) {
+            setUnreadCount(prev => prev + 1);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('📢 REAL-TIME: Notification updated:', payload.new);
+          const updatedNotification = payload.new as Notification;
+          
+          // Update local state
+          setNotifications(prev =>
+            prev.map(notification =>
+              notification.id === updatedNotification.id 
+                ? updatedNotification
+                : notification
+            )
+          );
+          
+          // Recalculate unread count
+          refreshNotifications(); // Force refresh to get accurate count
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔔 Supabase subscription status:', status);
+      });
+
+    return () => {
+      console.log('🧹 Cleaning up subscription for user:', userId);
+      subscription.unsubscribe();
+    };
+  }, [userId]);
+
   return (
     <NotificationContext.Provider value={{
       notifications,

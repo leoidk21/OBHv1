@@ -18,10 +18,12 @@ const SignUp = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  
+  const [loading, setLoading] = useState<boolean>(false);
+
   const { resetEventSubmission, loadEventData } = useEvent();
 
   const handleSignUp = async () => {
+    setLoading(true);
     console.log('Values:', { firstName, lastName, email });
 
     if (!firstName || !lastName || !email || !password) {
@@ -66,6 +68,8 @@ const SignUp = () => {
     } catch (err: any) {
       console.error('Signup error:', err);
       Alert.alert("Error", err.error || "Something went wrong");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -105,7 +109,6 @@ const SignUp = () => {
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                   enableOnAndroid={true}
-                  extraScrollHeight={20}
                   enableAutomaticScroll={true}
                 >
                   <ScrollView 
@@ -184,10 +187,13 @@ const SignUp = () => {
                       />
                       
                       <TouchableOpacity 
-                        style={styles.submitBtn}
+                        style={[styles.submitBtn, loading && { opacity: 0.5 }]}
                         onPress={handleSignUp}
+                        disabled={!!loading}
                       >
-                        <Text style={styles.submitText}>SIGN UP</Text>
+                        <Text style={styles.submitText}>
+                          {loading ? 'SIGNING UP...' : 'SIGN UP'}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </ScrollView>
@@ -215,7 +221,7 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: hp('12%'),
+    paddingBottom: hp('5%'),
   },
 
   centeredContent: {
@@ -233,7 +239,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     borderWidth: 1,
     width: wp('80%'),
-    fontSize: wp('4%'),
+    fontSize: wp('3.6%'),
     borderRadius: wp('10%'),
     borderColor: colors.border,
     paddingHorizontal: wp('5%'),

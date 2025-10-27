@@ -56,10 +56,10 @@ p, h1, h2, h3, h4, h5, h6 {
     min-width: 280px;
     overflow: hidden;
     position: relative;
-    background: #1B3C53;
     flex-direction: column;
     align-items: flex-start;
     border-right: 2px solid #e5e5e5;
+    background: linear-gradient( #19579C, #102E50);
     box-shadow: rgba(99, 99, 99, 0.2) 0px 2px 8px 0px;
 }
 

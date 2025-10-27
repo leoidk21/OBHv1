@@ -17,7 +17,11 @@ const router = express.Router();
 // ============================================
 const sendEventStatusNotification = async (userId, eventId, status, eventName, remarks = '') => {
   try {
-    console.log('Attempting to send notification to user:', userId);
+    console.log('🎯 Attempting to send notification to user:', userId);
+    console.log('📝 Notification details:', { userId, eventId, status, eventName, remarks });
+    
+    // Ensure status is a string and handle undefined/null
+    const statusText = String(status || 'updated').toLowerCase();
     
     const { data, error } = await supabase
       .from('notifications')
@@ -26,7 +30,7 @@ const sendEventStatusNotification = async (userId, eventId, status, eventName, r
           user_id: userId,
           type: 'EVENT_STATUS_UPDATE',
           title: 'Event Status Update',
-          message: `Your event "${eventName}" has been ${status.toLowerCase()}`,
+          message: `Your event "${eventName}" has been ${statusText}`,
           data: {
             eventId: eventId,
             status: status,
@@ -35,20 +39,21 @@ const sendEventStatusNotification = async (userId, eventId, status, eventName, r
           is_read: false,
           created_at: new Date().toISOString()
         }
-      ]);
+      ])
+      .select(); // Add this to get the inserted data back
 
     if (error) {
       console.error('❌ Supabase insert error:', error);
       return false;
     }
 
-    console.log('✅ Notification inserted successfully for user:', userId);
+    console.log('✅ Notification inserted successfully:', data);
     return true;
     
   } catch (error) {
     console.error('❌ Error in sendEventStatusNotification:', error);
     return false;
-  }
+  } 
 };
 
 // ============================================
@@ -88,22 +93,7 @@ router.put('/review/:id', verifyAdminAuth, async (req, res) => {
 
     const event = eventResult.rows[0];
 
-    console.log('🔄 Calling sendEventStatusNotification with:', {
-      userId: event.user_id,
-      eventId: event.id,
-      status: status,
-      eventName: event.event_type
-    });
-
-    sendEventStatusNotification(
-      event.user_id, 
-      event.id, 
-      status, 
-      event.event_type || 'Event',
-      remarks
-    );
-
-    // Update the event status
+    // Update the event status FIRST
     const updateResult = await pool.query(
       `UPDATE event_plans
        SET 
@@ -125,9 +115,15 @@ router.put('/review/:id', verifyAdminAuth, async (req, res) => {
 
     const updatedEvent = updateResult.rows[0];
 
-    // Send real-time notification to the user
-    sendEventStatusNotification(
-      req, 
+    console.log('🔄 Calling sendEventStatusNotification with:', {
+      userId: event.user_id,
+      eventId: event.id,
+      status: status,
+      eventName: event.event_type
+    });
+
+    // Send notification AFTER successful update - CALL THIS ONLY ONCE
+    const notificationSent = await sendEventStatusNotification(
       event.user_id, 
       event.id, 
       status, 
@@ -135,10 +131,13 @@ router.put('/review/:id', verifyAdminAuth, async (req, res) => {
       remarks
     );
 
+    console.log('📢 Notification send result:', notificationSent ? 'Success' : 'Failed');
+
     return res.status(200).json({
       success: true,
       message: `Event ${status.toLowerCase()} successfully`,
       event: updatedEvent,
+      notificationSent: notificationSent
     });
   } catch (error) {
     console.error('❌ Error reviewing event:', error);

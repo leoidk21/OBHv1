@@ -179,9 +179,9 @@ const ESignature  = () => {
                     <TouchableOpacity
                         onPress={handleSaveSignature}
                         style={[styles.confirmButton, loading && styles.disabledButton]}
-                        disabled={loading}
+                        disabled={!!loading}
                     >
-                        <Text style={[styles.saveText, loading && styles.disabledText]}>
+                        <Text style={[styles.saveText]}>
                             {loading ? 'Saving...' : 'Save'}
                         </Text>
                     </TouchableOpacity>
@@ -284,11 +284,10 @@ introContainer: {
 
 introText: {
     textAlign: "center",
-    fontSize: wp("4.5%"),
+    fontSize: wp("4%"),
     fontFamily: "Poppins",
-    marginHorizontal: wp("10%"),
+    marginHorizontal: wp("8%"),
 },
-
 
 previewContainer: {
     borderWidth: 1,
@@ -384,11 +383,9 @@ reviewText: {
 section: {
     borderWidth: 1,
     padding: wp('3%'),
-    borderLeftWidth: 4,
     borderRadius: wp('2%'),
     marginBottom: hp('1.5%'),
     borderColor: colors.borderv2,
-    borderLeftColor: colors.border,
 },
 
 sectionTitle: {
@@ -435,15 +432,14 @@ modalButtons: {
 
 cancelButton: {
     flex: 1,
-    padding: hp('1.5%'),
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
     alignItems: 'center',
-    marginRight: wp('2%'),
-    borderRadius: wp('2%'),
-    backgroundColor: colors.brown,
 },
 
 cancelButtonText: {
-    color: 'white',
+    color: 'black',
     fontFamily: 'Poppins',
     fontWeight: '600',
     fontSize: wp('3.5%'),
@@ -451,11 +447,10 @@ cancelButtonText: {
 
 submitButton: {
     flex: 1,
-    padding: hp('1.5%'),
-    marginLeft: wp('2%'),
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: colors.brown,
     alignItems: 'center',
-    borderRadius: wp('2%'),
-    backgroundColor: '#28a745',
 },
 
 submitButtonText: {

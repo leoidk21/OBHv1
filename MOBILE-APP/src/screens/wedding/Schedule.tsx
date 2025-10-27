@@ -663,9 +663,8 @@ eventNotesCon: {
     width: wp("63%"),
     borderWidth: 0.6,
     height: hp("11%"),
-    marginTop: hp("1.2%"),
+    marginTop: hp("1%"),
     borderRadius: wp("2.5%"),
-    borderColor: "#B47D4C",
     paddingVertical: hp("1%"),
     paddingHorizontal: wp("3.5%"),
 },
@@ -912,7 +911,7 @@ timeCircleContainer: {
 connectorLine: {
     width: 1,
     height: hp("2%"),
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#000000",
 },
 
 timeLabel: {

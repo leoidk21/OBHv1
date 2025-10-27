@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform  } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform, Share, Linking  } from "react-native";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp} from "react-native-responsive-screen";
 import colors from "../config/colors";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
-import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
+import { faChevronRight, faCopy, faPaperPlane } from "@fortawesome/free-solid-svg-icons"; // ADDED ICONS
 import Svg, { Path } from "react-native-svg";
 import { Alert } from "react-native";
 import { Guest } from "../../screens/type";
@@ -13,24 +13,48 @@ import NavigationSlider from './ReusableComponents/NavigationSlider';
 import MenuBar from "./ReusableComponents/MenuBar";
 
 import { useEvent } from '../../context/EventContext';
+import * as Clipboard from 'expo-clipboard';
 
-const GuestComponent  = () => {
-  // guest methods according to EventContext.tsx
+const GuestComponent = () => {
   const {
     addGuest,
     getGuests,
     updateGuest,
     removeGuest,
     getGuestStats,
-    eventData
+    eventData,
+    copyToClipboard,
+    shareViaMessenger,
+    generateInviteLink,
+    loadEventData // Add this if available in your context
   } = useEvent();
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Refresh guest list
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // Reload event data which should refresh guests
+      if (loadEventData) {
+        await loadEventData();
+      }
+      // You might need to add a specific refreshGuests method to your context
+      Alert.alert("Success", "Guest list updated");
+    } catch (error) {
+      Alert.alert("Error", "Failed to refresh guest list");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const [modalVisible, setModalVisible] = useState(false);
   const [rsvpModal, setrsvpModal] = useState(false);
   const [selectedRSVP, setSelectedRSVP] = useState(-1);
   const [currentGuestName, setCurrentGuestName] = useState('');
+  const [generatingLinks, setGeneratingLinks] = useState<{[key: string]: boolean}>({});
 
-  // Get guests from context instead of local state
+  // Get guests from context
   const invitedGuests = useMemo(() => getGuests(), [eventData.guests]);
   const guestStats = useMemo(() => getGuestStats(), [eventData.guests]);
 
@@ -50,9 +74,57 @@ const GuestComponent  = () => {
     }
   }, [searchQuery, invitedGuests]);
 
-  const handleSaveRSVPStatus = () => {
-    setrsvpModal(false);
-    setModalVisible(true);
+  // Handle generating invitation link
+const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
+  try {
+    setGeneratingLinks(prev => ({ ...prev, [guestId]: true }));
+    
+    console.log('🔍 DEBUG Before generating link:');
+    console.log('   Guest ID:', guestId);
+    console.log('   Guest Name:', guestName);
+    console.log('   Event Data:', eventData);
+    
+    const link = await generateInviteLink(guestId, guestName);
+    
+    console.log('✅ DEBUG After generating link:');
+    console.log('   Generated Link:', link);
+    
+    // Update the guest with the new link
+    updateGuest(guestId, { inviteLink: link });
+    
+    Alert.alert("Success", "Invitation link generated for your LATEST event!");
+    
+  } catch (error: any) {
+    console.error('Generate link error:', error);
+    Alert.alert("Error", error.message || "Failed to generate invitation link");
+  } finally {
+    setGeneratingLinks(prev => ({ ...prev, [guestId]: false }));
+  }
+};
+
+  const handleCopyLink = async (link: string) => {
+    try {
+      await copyToClipboard(link);
+      Alert.alert("Copied!", "Invitation link copied to clipboard");
+    } catch (error) {
+      Alert.alert("Error", "Failed to copy link");
+      console.error('Copy error:', error);
+    }
+  };
+
+  // Handle sharing via Messenger
+  const handleShareViaMessenger = async (link: string, guestName: string) => {
+    try {
+      const message = `${guestName}, you're invited to our wedding! 🎉 Click here to RSVP: ${link}`;
+      
+      await Share.share({
+        message: message,
+        title: 'Wedding Invitation'
+      });
+    } catch (error) {
+      console.error('Share error:', error);
+      Alert.alert("Error", "Failed to share invitation");
+    }
   };
 
   const handleAddGuest = () => {
@@ -63,7 +135,6 @@ const GuestComponent  = () => {
 
     const guestRange = eventData?.guest_range || "0-0";
     
-    // Ensure min and max are numbers, even if guestRange is a single number
     let minGuests = 0;
     let maxGuests = 0;
     
@@ -88,7 +159,7 @@ const GuestComponent  = () => {
     addGuest({
       name: currentGuestName.trim(),
       status: guestStatus,
-      inviteLink: Math.random().toString(36).substring(7)
+      inviteLink: "" // Empty initially, will be generated later
     });
 
     setCurrentGuestName('');
@@ -255,26 +326,68 @@ const GuestComponent  = () => {
 
                 {/* ROWS */}
                 {filteredGuests.map((guest) => (
-                  <TouchableOpacity 
-                    style={styles.deleteButton}
-                    onPress={() => handleRemoveGuest(guest.id)}
-                  >
-                  <View key={guest.id} style={styles.guestBadge}>
-                    <Text style={[styles.filteredGuestText, styles.columnName]}>{guest.name}</Text>
-                    <Text
-                      style={[
-                        styles.filteredGuestText,
-                        styles.columnStatus,
-                        { color: getStatusColor(guest.status) },
-                      ]}
-                    >
-                      {guest.status}
-                    </Text>
-                    <Text style={[styles.filteredGuestText, styles.columnLink]}>
-                      …/invite/{guest.inviteLink}
-                    </Text>
+                  <View key={guest.id} style={styles.guestRow}>
+                    <View style={styles.guestBadge}>
+                      <Text style={[styles.filteredGuestText, styles.columnName]}>{guest.name}</Text>
+                      <Text
+                        style={[
+                          styles.filteredGuestText,
+                          styles.columnStatus,
+                          { color: getStatusColor(guest.status) },
+                        ]}
+                      >
+                        {guest.status}
+                      </Text>
+                      
+                      <View style={[styles.columnLink, styles.linkContainer]}>
+                        {guest.inviteLink ? (
+                          <Text style={styles.inviteLinkText} numberOfLines={1}>
+                            {guest.inviteLink.length > 20 
+                              ? `${guest.inviteLink.substring(0, 20)}...` 
+                              : guest.inviteLink
+                            }
+                          </Text>
+                        ) : (
+                          <Text style={styles.noLinkText}>No link</Text>
+                        )}
+                      </View>
+                      
+                      <View style={[styles.columnActions, styles.actionsContainer]}>
+                        {!guest.inviteLink ? (
+                         <TouchableOpacity
+                            style={[styles.actionButton, styles.generateButton]}
+                            onPress={() => handleGenerateInviteLink(guest.id, guest.name)}
+                            disabled={generatingLinks[guest.id]}
+                          >
+                            <Text style={styles.actionButtonText}>
+                              {generatingLinks[guest.id] ? '...' : 'Generate'}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <>
+                            <TouchableOpacity 
+                              style={[styles.actionButton, styles.copyButton]}
+                              onPress={() => handleCopyLink(guest.inviteLink!)}
+                            >
+                              <FontAwesomeIcon icon={faCopy} size={14} color="white" />
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                              style={[styles.actionButton, styles.shareButton]}
+                              onPress={() => handleShareViaMessenger(guest.inviteLink!, guest.name)}
+                            >
+                              <FontAwesomeIcon icon={faPaperPlane} size={14} color="white" />
+                            </TouchableOpacity>
+                          </>
+                        )}
+                        <TouchableOpacity 
+                          style={[styles.actionButton, styles.deleteButton]}
+                          onPress={() => handleRemoveGuest(guest.id)}
+                        >
+                          <Text style={styles.deleteButtonText}>×</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                  </TouchableOpacity>
                 ))}
               </View>
               
@@ -595,6 +708,60 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
     marginTop: hp("1.5%"),
     marginHorizontal: wp("5%"),
+  },
+
+    guestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingVertical: 10,
+  },
+  linkContainer: {
+    flex: 2,
+    paddingHorizontal: 5,
+    justifyContent: 'center',
+  },
+  actionsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 5,
+  },
+  inviteLinkText: {
+    fontSize: 12,
+    color: '#0066cc',
+    fontFamily: 'monospace',
+  },
+  noLinkText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 5,
+    marginHorizontal: 2,
+    minWidth: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  generateButton: {
+    backgroundColor: '#4CAF50',
+  },
+  copyButton: {
+    backgroundColor: '#2196F3',
+  },
+  shareButton: {
+    backgroundColor: '#0084ff',
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  columnActions: {
+    flex: 1.5,
   },
 });
 const getStatusColor = (status: string): string => {
