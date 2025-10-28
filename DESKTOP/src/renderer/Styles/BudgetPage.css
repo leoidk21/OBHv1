@@ -322,7 +322,7 @@
 
 .reminder-notes {
     resize: vertical;
-    min-height: 80px;
+    min-height: 120px;
     line-height: 1.4;
     white-space: pre-line;
 }

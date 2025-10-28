@@ -21,44 +21,8 @@ type PolicyItem = {
 
 const policies: PolicyItem[] = [
   {
-    title: "1. Booking & Reservations",
-    content: "Bookings confirmed with a signed agreement + deposit. Tentative bookings held for 7 days. Deposits are non-refundable but may apply to future events if canceled >30 days in advance.",
-  },
-  {
-    title: "2. Payment Policy",
-    content: "Full payment required 14 days before the event. Acceptable methods: bank transfer, credit/debit card, in-app payment. Late payment may delay services or cancel event.",
-  },
-  {
-    title: "3. Cancellation & Refunds",
-    content: "Submit cancellation in-app or via email. Refunds: >30 days before: 50% deposit refundable <30 days before: deposit non-refundable. Third-party vendor fees are non-refundable.",
-  },
-  {
-    title: "4. Out of Town Fee (OOTF)",
-    content: "Applies for events outside the city or remote areas. Calculated based on travel, accommodation, and logistics.",
-  },
-  {
-    title: "5. Service Changes",
-    content: "Modifications allowed up to 14 days before the event. Changes within 14 days may incur extra fees.",
-  },
-  {
-    title: "6. Vendor & Third-Party Services",
-    content: "We coordinate trusted vendors (catering, décor, entertainment). Not responsible for vendor errors/delays. External vendors must be approved by Orchestrated By HIStory.",
-  },
-  {
-    title: "7. Liability",
-    content: "We are not responsible for: - Personal injury - Loss/damage of property - Weather-related disruptions",
-  },
-  {
-    title: "8. Privacy & Data Protection",
-    content: "Client info is confidential and used only for event planning. We don't share data without consent.",
-  },
-  {
-    title: "9. Communication",
-    content: "Provide valid contact info. Response times: - App / email: 24 - 48 hours - Urgent: via phone/emergency contact",
-  },
-  {
-    title: "10. Amendments",
-    content: "Policies may be updated at any time. Clients notified via app / email.",
+    title: "Cancellation",  
+    content: "If the client cancels the contracted event, the Event-Coordination Service will retain the 20% retainer fee as liquidated damages. Date of event can only be postponed and move to another date.",
   },
 ];
 
@@ -222,7 +186,7 @@ const CompanyPolicy = () => {
 
           <View>
             <Text style={styles.topContentText}>
-              Orchestrated By HIStory Company Policies
+              Orchestrated By HIStory Contract Agreement
             </Text>
           </View>
 
@@ -239,16 +203,21 @@ const CompanyPolicy = () => {
           ))}
 
           <View style={styles.termsCondition}>
-            <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <CheckBox isChecked={accepted} onClick={() => setAccepted(!accepted)} />
-              <Text style={{ fontFamily: "Poppins" }}>Please accept our Terms & Conditions</Text>
+              <Text style={{ fontFamily: 'Poppins' }}>
+                I hereby understand and agreed on these terms and conditions upon signing this contract.
+              </Text>
             </View>
+
+            <View style={{ flex: 1 }} />
+
             <TouchableOpacity
               style={[styles.continueBtn, !accepted && styles.continueBtnDisabled]}
               onPress={handleContinue}
               disabled={!accepted}
             >
-              <Text style={styles.continue}>Continue</Text>    
+              <Text style={styles.continue}>Continue</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -442,23 +411,26 @@ const styles = StyleSheet.create({
     sectionHeader: {},
 
     termsCondition: {
-      marginTop: hp("2%"),
-      marginHorizontal: wp("5%"),
+      flex: 1,
+      marginTop: hp('2%'),
+      marginHorizontal: wp('5%'),
 
       borderTopWidth: 1,
-      paddingTop: hp("2%"),
+      paddingTop: hp('2%'),
       borderColor: colors.borderv1,
     },
 
     continueBtn: {
       width: wp('88%'),
-      marginTop: hp('2%'),
       alignItems: 'center',
       borderRadius: wp('50%'),
-      marginBottom: hp('2.5%'),
       paddingVertical: hp('1.4%'),
       paddingHorizontal: wp('5%'),
+
+      marginTop: hp("35%"),
+
       backgroundColor: colors.button,
+      alignSelf: 'center',
     },
 
     continue: {

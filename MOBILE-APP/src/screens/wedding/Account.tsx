@@ -11,7 +11,7 @@ import { Alert } from "react-native";
 import { useNavigation } from '@react-navigation/native';
 import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import NavigationSlider from './ReusableComponents/NavigationSlider';
-import MenuBar from "./ReusableComponents/MenuBar";
+import { updateUserProfile, getCurrentUser } from '../../lib/supabase-auth';
 
 import * as SecureStore from 'expo-secure-store';
 import { getUserData, updateProfile, storeUserData } from "../auth/user-auth";
@@ -147,22 +147,20 @@ const handleSave = async () => {
   setError('');
   
   try {
-    const response = await updateProfile(firstName, lastName, email);
-    
-    // Update stored user data
-    const updatedUser = {
-      ...user,
+    await updateUserProfile({
       first_name: firstName,
       last_name: lastName,
-      email
-    };
-    await storeUserData(updatedUser);
+      email: email
+    });
+    
+    // Refresh user data
+    const updatedUser = await getCurrentUser();
     setUser(updatedUser);
     
     setModalVisible(false);
-    Alert.alert('Success', response.message || 'Profile updated successfully!');
+    Alert.alert('Success', 'Profile updated successfully!');
   } catch (error: any) {
-    const errorMsg = error.error || error.message || 'Failed to update profile';
+    const errorMsg = error.message || 'Failed to update profile';
     setError(errorMsg);
     Alert.alert('Error', errorMsg);
   } finally {

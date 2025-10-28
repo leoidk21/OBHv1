@@ -4,7 +4,7 @@ import { useEvent } from './EventContext'; // Import from EventContext
 
 interface Notification {
   id: number;
-  user_id: string;
+  user_uuid: string;
   type: string;
   title: string;
   message: string;
@@ -34,6 +34,7 @@ const NotificationContext = createContext<NotificationContextType>({
 
 export const useNotifications = () => useContext(NotificationContext);
 
+// NotificationContext.tsx - FIXED VERSION
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -41,7 +42,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   
   // Get user ID from EventContext
   const eventContext = useEvent();
-  const userId = eventContext.userId?.toString(); // Convert to string if needed
+  const userId = eventContext.userId?.toString();
 
   console.log('🎯 NotificationContext - User ID from EventContext:', userId);
 
@@ -59,7 +60,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_uuid', userId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -120,7 +121,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           is_read: true, 
           read_at: new Date().toISOString() 
         })
-        .eq('user_id', userId)
+        .eq('user_uuid', userId)
         .eq('is_read', false);
 
       if (error) {
@@ -141,7 +142,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Real-time subscription
+  // SINGLE Real-time subscription - REMOVED THE DUPLICATE
   useEffect(() => {
     if (!userId) {
       console.log('❌ No userId for real-time subscription');
@@ -159,50 +160,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          console.log('📢 REAL-TIME: New notification received:', payload.new);
-          const newNotification = payload.new as Notification;
-          
-          // Add to notifications list
-          setNotifications(prev => [newNotification, ...prev]);
-          
-          // Increment unread count if not read
-          if (!newNotification.is_read) {
-            setUnreadCount(prev => prev + 1);
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('🔔 Supabase subscription status:', status);
-      });
-
-    return () => {
-      console.log('🧹 Cleaning up subscription for user:', userId);
-      subscription.unsubscribe();
-    };
-  }, [userId]);
-
-  // Update your real-time subscription
-  useEffect(() => {
-    if (!userId) {
-      console.log('❌ No userId for real-time subscription');
-      return;
-    }
-
-    console.log('🎯 Setting up real-time for user:', userId);
-    refreshNotifications(); // Initial fetch
-
-    const subscription = supabase
-      .channel(`user-${userId}-notifications`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
+          filter: `user_uuid=eq.${userId}`,
         },
         (payload) => {
           console.log('📢 REAL-TIME: New notification received:', payload.new);
@@ -223,7 +181,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           event: 'UPDATE',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${userId}`,
+          filter: `user_uuid=eq.${userId}`,  // ← Change this from user_id to user_uuid
         },
         (payload) => {
           console.log('📢 REAL-TIME: Notification updated:', payload.new);
@@ -239,18 +197,22 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           );
           
           // Recalculate unread count
-          refreshNotifications(); // Force refresh to get accurate count
+          const newUnreadCount = notifications.filter(n => !n.is_read).length;
+          setUnreadCount(newUnreadCount);
         }
       )
       .subscribe((status) => {
         console.log('🔔 Supabase subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to real-time notifications');
+        }
       });
 
     return () => {
       console.log('🧹 Cleaning up subscription for user:', userId);
       subscription.unsubscribe();
     };
-  }, [userId]);
+  }, [userId]); // Only this one useEffect
 
   return (
     <NotificationContext.Provider value={{

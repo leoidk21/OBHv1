@@ -1,10 +1,13 @@
+// At the TOP of LandingPage.js - REPLACE the existing API_BASE
+
 // LANDING PAGE CONTROLLER
 if (window.__LandingPageModuleInstance) {
     console.log("LandingPageModule already loaded – reusing existing instance");
     window.LandingPageModule = window.__LandingPageModuleInstance;
 } else {
     window.LandingPageModule = (function () {
-        const API_BASE = "http://localhost:3000/api";
+        const API_BASE = "https://vxukqznjkdtuytnkhldu.supabase.co/rest/v1";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA";
         let allEvents = [];
         let dashboardStats = null;
         let currentEventId = null;
@@ -166,103 +169,80 @@ if (window.__LandingPageModuleInstance) {
         // ============================================
         // IMPROVED FETCH ALL EVENTS
         // ============================================
-        async function loadEvents(forceRefresh = false) {
-            // Don't refetch if we already have events and not forcing refresh
-            if (allEvents.length > 0 && !forceRefresh) {
-                console.log("Using cached events, skipping API call");
-                showContent();
-                return;
-            }
+        // ============================================
+// IMPROVED FETCH ALL EVENTS - SUPABASE VERSION
+// ============================================
+async function loadEvents(forceRefresh = false) {
+    // Don't refetch if we already have events and not forcing refresh
+    if (allEvents.length > 0 && !forceRefresh) {
+        console.log("Using cached events, skipping API call");
+        showContent();
+        return;
+    }
 
-            try {
-                const token = getAuthToken();
-                if (!token) {
-                    throw new Error("No authentication token found");
-                }
+    try {
+        console.log("📡 Fetching events from Supabase...");
+        const response = await fetch(`${API_BASE}/event_plans?select=*`, {
+            method: "GET",
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json",
+            },
+        });
 
-                console.log("📡 Fetching events from API...");
-                const response = await fetch(`${API_BASE}/admin/event-plans`, {
-                    method: "GET",
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
-                        Accept: "application/json",
-                    },
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.error || "Failed to fetch events");
-                }
-
-                allEvents = data.event_plans || [];
-
-                // Save to localStorage for persistence
-                localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
-
-                // Save to Electron memory store
-                if (window.store) {
-                    window.store.set("events", allEvents);
-                }
-
-                // Update UI
-                refreshUI();
-                await loadDashboardStats();
-
-                showContent();
-
-                console.log(`✅ Loaded ${allEvents.length} events from API`);
-            } catch (error) {
-                console.error("Error loading events:", error);
-                showNotification("Failed to load events: " + error.message, "error");
-                showContent();
-            }
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+
+        // Supabase returns the data directly (array of events)
+        allEvents = await response.json();
+
+        // Save to localStorage for persistence
+        localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+
+        // Save to Electron memory store
+        if (window.store) {
+            window.store.set("events", allEvents);
+        }
+
+        // Update UI
+        refreshUI();
+        await loadDashboardStats();
+
+        showContent();
+
+        console.log(`✅ Loaded ${allEvents.length} events from Supabase`);
+    } catch (error) {
+        console.error("Error loading events:", error);
+        showNotification("Failed to load events: " + error.message, "error");
+        showContent();
+    }
+}
 
         // ============================================
         // LOAD DASHBOARD STATS
         // ============================================
-        async function loadDashboardStats(forceRefresh = false) {
-            if (dashboardStats && !forceRefresh) {
-                updateDashboardCards(dashboardStats);
-                return;
-            }
+        // ============================================
+// LOAD DASHBOARD STATS - SUPABASE VERSION
+// ============================================
+async function loadDashboardStats(forceRefresh = false) {
+    if (dashboardStats && !forceRefresh) {
+        updateDashboardCards(dashboardStats);
+        return;
+    }
 
-            try {
-                const token = getAuthToken();
-                const response = await fetch(
-                    `${API_BASE}/admin/event-plans/stats/summary`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json",
-                        },
-                    },
-                );
+    try {
+        // Since we don't have a stats endpoint, compute locally
+        dashboardStats = computeDashboardStatsLocally();
+    } catch (error) {
+        console.error("Error loading stats:", error);
+        dashboardStats = computeDashboardStatsLocally(); // fallback
+    }
 
-                if (!response.ok) {
-                    throw new Error("Failed to fetch statistics");
-                }
-
-                const data = await response.json();
-
-                if (data.success && data.stats) {
-                    dashboardStats = data.stats;
-                } else {
-                    dashboardStats = computeDashboardStatsLocally(); // fallback
-                }
-            } catch (error) {
-                console.error("Error loading stats:", error);
-            }
-
-            localStorage.setItem("cachedDashboardStats", JSON.stringify(dashboardStats));
-            updateDashboardCards(dashboardStats);
-        }
+    localStorage.setItem("cachedDashboardStats", JSON.stringify(dashboardStats));
+    updateDashboardCards(dashboardStats);
+}
 
         // ============================================
         // UPDATE DASHBOARD CARDS - FIXED
@@ -318,18 +298,18 @@ if (window.__LandingPageModuleInstance) {
             if (upcomingEvents.length === 0) {
                 tbody.innerHTML = `
                 <tr>
-                    <td colspan="5" style="text-align: center; padding: 2rem;">No upcoming events</td>
+                    <td colspan="6" style="text-align: center; padding: 2rem;">No upcoming events</td>
                 </tr>`;
                 return;
             }
 
             tbody.innerHTML = upcomingEvents.map(event => `
                 <tr data-event-id="${event.id}">
-                <td>${escapeHtml(event.client_name || "N/A")}</td>
-                <td>${escapeHtml(event.event_type || "N/A")}</td>
-                <td>${formatDate(event.event_date)}</td>
-                <td><span class="status status-${event.status.toLowerCase()}">${event.status}</span></td>
-                <td><button class="view-btn" onclick="LandingPageModule.viewEvent(${event.id})">View</button></td>
+                    <td>${escapeHtml(event.client_name || "N/A")}</td>
+                    <td>${escapeHtml(event.event_type || "N/A")}</td>
+                    <td>${formatDate(event.event_date)}</td>
+                    <td><span class="status status-${event.status.toLowerCase()}">${event.status}</span></td>
+                    <td><button class="view-btn" onclick="LandingPageModule.viewEvent(${event.id})">View</button></td>
                 </tr>
             `).join("");
 
@@ -402,76 +382,82 @@ if (window.__LandingPageModuleInstance) {
         // ============================================
         // MARK EVENT AS COMPLETED (PUT request)
         // ============================================
-        async function markEventAsCompleted(eventId) {
-            try {
-            const token = getAuthToken();
-            const response = await fetch(`${API_BASE}/admin/event-plans/review/${eventId}`, {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    status: "Completed",
-                    remarks: "Automatically marked as completed after event date"
-                }),
-            });
+        // ============================================
+// MARK EVENT AS COMPLETED - SUPABASE VERSION
+// ============================================
+async function markEventAsCompleted(eventId) {
+    try {
+        const response = await fetch(`${API_BASE}/event_plans?id=eq.${eventId}`, {
+            method: "PATCH",
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+            },
+            body: JSON.stringify({
+                status: "Completed",
+                remarks: "Automatically marked as completed after event date",
+                updated_at: new Date().toISOString()
+            }),
+        });
 
-            if (!response.ok) {
-                const text = await response.text().catch(()=>null);
-                throw new Error(`HTTP ${response.status} ${text || ''}`);
-            }
-
-            console.log("Marking outdated:", outdated.map(e => e.client_name));
-
-            const data = await response.json();
-                if (data.success) {
-                console.log(`Event ${eventId} marked as Completed (server)`);
-                return true;
-            } else {
-                console.warn(`Server rejected completing event ${eventId}:`, data);
-                return false;
-            }
-            } catch (err) {
-                console.error("Error marking event completed:", err);
-                return false;
-            }
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
+
+        const data = await response.json();
+        if (data && data.length > 0) {
+            console.log(`Event ${eventId} marked as Completed (server)`);
+            return true;
+        } else {
+            console.warn(`Server rejected completing event ${eventId}`);
+            return false;
+        }
+    } catch (err) {
+        console.error("Error marking event completed:", err);
+        return false;
+    }
+}
 
         // ============================================
         // VIEW EVENT DETAILS
         // ============================================
-        async function viewEvent(eventId) {
-            try {
-                console.log("Viewing event:", eventId);
-                currentEventId = eventId;
+        // ============================================
+// VIEW EVENT DETAILS - SUPABASE VERSION
+// ============================================
+async function viewEvent(eventId) {
+    try {
+        console.log("Viewing event:", eventId);
+        currentEventId = eventId;
 
-                const token = getAuthToken();
-                const response = await fetch(
-                    `${API_BASE}/admin/event-plans/${eventId}`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json",
-                            Accept: "application/json",
-                        },
-                    },
-                );
+        const response = await fetch(
+            `${API_BASE}/event_plans?id=eq.${eventId}&select=*`,
+            {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    "Content-Type": "application/json",
+                },
+            },
+        );
 
-                if (!response.ok) {
-                    throw new Error("Failed to fetch event details");
-                }
-
-                const data = await response.json();
-
-                if (data.success && data.event) {
-                    displayEventModal(data.event);
-                }
-            } catch (error) {
-                console.error("Error viewing event:", error);
-                showNotification("Failed to load event details", "error");
-            }
+        if (!response.ok) {
+            throw new Error("Failed to fetch event details");
         }
+
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+            displayEventModal(data[0]);
+        } else {
+            throw new Error("Event not found");
+        }
+    } catch (error) {
+        console.error("Error viewing event:", error);
+        showNotification("Failed to load event details", "error");
+    }
+}
 
         // ============================================
         // DISPLAY EVENT IN MODAL
@@ -568,145 +554,146 @@ if (window.__LandingPageModuleInstance) {
         // ============================================                     
         // APPROVE EVENT
         // ============================================
-        async function approveEvent() {
-            if (!currentEventId) return;
+// ============================================                     
+// APPROVE EVENT - SUPABASE VERSION
+// ============================================
+async function approveEvent() {
+    if (!currentEventId) return;
 
-            try {
-                const token = getAuthToken();
-                const response = await fetch(
-                    `${API_BASE}/admin/event-plans/review/${currentEventId}`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json",
-                            Accept: "application/json",
-                        },
-                        body: JSON.stringify({
-                            status: "Approved",
-                            remarks: "Approved by admin",
-                        }),
-                    },
-                );
+    try {
+        const response = await fetch(
+            `${API_BASE}/event_plans?id=eq.${currentEventId}`,
+            {
+                method: "PATCH",
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation"
+                },
+                body: JSON.stringify({
+                    status: "Approved",
+                    remarks: "Approved by admin",
+                    updated_at: new Date().toISOString()
+                }),
+            },
+        );
 
-                if (!response.ok) {
-                    throw new Error("Failed to approve event");
-                }
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showNotification("Event approved successfully", "success");
-                    
-                    // Log the action for super admin monitoring
-                    await logAdminAction('APPROVE_EVENT', 'Events', {
-                        eventId: currentEventId,
-                        action: 'approved',
-                        remarks: "Approved by admin",
-                        timestamp: new Date().toISOString()
-                    });
-                    
-                    closeModal();
-                    await loadEvents(true);
-                    await loadDashboardStats(true);
-                }
-            } catch (error) {
-                console.error("Error approving event:", error);
-                showNotification("Failed to approve event", "error");
-            }
+        if (!response.ok) {
+            throw new Error("Failed to approve event");
         }
+
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+            showNotification("Event approved successfully", "success");
+            
+            // Update local cache
+            const updatedEvent = data[0];
+            const index = allEvents.findIndex(e => e.id === currentEventId);
+            if (index !== -1) {
+                allEvents[index] = updatedEvent;
+                localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+            }
+            
+            closeModal();
+            await loadEvents(true);
+            await loadDashboardStats(true);
+        }
+    } catch (error) {
+        console.error("Error approving event:", error);
+        showNotification("Failed to approve event", "error");
+    }
+}
 
         // ============================================
         // REJECT EVENT
         // ============================================
-        async function rejectEvent() {
-            if (!currentEventId) return;
+// ============================================
+// REJECT EVENT - SUPABASE VERSION
+// ============================================
+async function rejectEvent() {
+    if (!currentEventId) return;
 
-            try {
-                const token = getAuthToken();
-                const response = await fetch(
-                    `${API_BASE}/admin/event-plans/review/${currentEventId}`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            "Content-Type": "application/json",
-                            Accept: "application/json",
-                        },
-                        body: JSON.stringify({
-                            status: "Rejected",
-                            remarks: "Rejected by admin",
-                        }),
-                    },
-                );
+    try {
+        const response = await fetch(
+            `${API_BASE}/event_plans?id=eq.${currentEventId}`,
+            {
+                method: "PATCH",
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation"
+                },
+                body: JSON.stringify({
+                    status: "Rejected",
+                    remarks: "Rejected by admin",
+                    updated_at: new Date().toISOString()
+                }),
+            },
+        );
 
-                if (!response.ok) {
-                    throw new Error("Failed to reject event");
-                }
-
-                const data = await response.json();
-
-                if (data.success) {
-                    showNotification("Event rejected", "success");
-                    
-                    // Log the action for super admin monitoring
-                    await logAdminAction('REJECT_EVENT', 'Events', {
-                        eventId: currentEventId,
-                        action: 'rejected',
-                        remarks: "Rejected by admin",
-                        timestamp: new Date().toISOString()
-                    });
-                    
-                    closeModal();
-                    loadEvents(true);
-                    loadDashboardStats(true);
-                }
-            } catch (error) {
-                console.error("Error rejecting event:", error);
-                showNotification("Failed to reject event", "error");
-            }
+        if (!response.ok) {
+            throw new Error("Failed to reject event");
         }
 
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+            showNotification("Event rejected", "success");
+            
+            // Update local cache
+            const updatedEvent = data[0];
+            const index = allEvents.findIndex(e => e.id === currentEventId);
+            if (index !== -1) {
+                allEvents[index] = updatedEvent;
+                localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+            }
+            
+            closeModal();
+            loadEvents(true);
+            loadDashboardStats(true);
+        }
+    } catch (error) {
+        console.error("Error rejecting event:", error);
+        showNotification("Failed to reject event", "error");
+    }
+}
         // ============================================
         // DELETE EVENT
         // ============================================
-        async function deleteEvent(eventId) {
-            try {
-                const token = getAuthToken();
-                if (!token) {
-                    showNotification("You must be logged in", "error");
-                    return;
-                }
+        // ============================================
+// DELETE EVENT - SUPABASE VERSION
+// ============================================
+async function deleteEvent(eventId) {
+    try {
+        const confirmDelete = confirm("Are you sure you want to delete this event?");
+        if (!confirmDelete) return;
 
-                const confirmDelete = confirm("Are you sure you want to delete this event?");
-                if (!confirmDelete) return;
+        const response = await fetch(`${API_BASE}/event_plans?id=eq.${eventId}`, {
+            method: "DELETE",
+            headers: { 
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": "application/json"
+            },
+        });
 
-                const response = await fetch(`${API_BASE}/event-plans/${eventId}`, {
-                    method: "DELETE",
-                    headers: { 
-                        Authorization: `Bearer ${token}`, 
-                        "Content-Type": "application/json"
-                    },
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    console.error("Failed to delete event:", data);
-                    showNotification("Failed to delete event", "error");
-                    return;
-                }
-
-                showNotification("Event deleted successfully", "success");
-
-                // Force-refresh dashboard & events
-                await loadEvents(true);
-                await loadDashboardStats(true);
-            } catch (error) {
-                console.error("Error deleting event:", error);
-                showNotification("Error deleting event", "error");
-            }
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
+
+        showNotification("Event deleted successfully", "success");
+
+        // Force-refresh dashboard & events
+        await loadEvents(true);
+        await loadDashboardStats(true);
+    } catch (error) {
+        console.error("Error deleting event:", error);
+        showNotification("Error deleting event", "error");
+    }
+}
 
         // ============================================
         // REFRESH DATA

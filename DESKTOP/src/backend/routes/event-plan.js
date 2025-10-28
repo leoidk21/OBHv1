@@ -74,7 +74,7 @@ try {
     .from('notifications')
     .insert([
         {
-        user_id: userId,
+        user_uuid: userId,
         type: 'PAYMENT_REMINDER',
         title: 'Payment Reminder',
         message: message,
@@ -280,9 +280,9 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
         if (guests && guests.length > 0) {
             for (const guest of guests) {
                 await pool.query(
-                    `INSERT INTO event_guests (event_plan_id, guest_name, status, invite_link)
+                    `INSERT INTO event_guests (event_plan_id, guest_name, status, invite_link, mobile_guest_id)
                     VALUES ($1, $2, $3, $4)`,
-                    [eventPlan.id, guest.name, guest.status, guest.inviteLink]
+                    [eventPlan.id, guest.name, guest.status, guest.inviteLink, guest.id]
                 );
             }
         }
@@ -867,41 +867,40 @@ router.get('/invitation-page/:eventId/:guestId/:token', async (req, res) => {
 });
 
 // ================ //
-// GENERATE INVITATION LINK (USE THIS EXACT VERSION)
+// GENERATE INVITATION LINK (FIXED VERSION)
 // ================ //
 router.post('/:eventId/guests/:guestId/generate-invite', authenticateToken, async (req, res) => {
     try {
         const { eventId, guestId } = req.params;
         const { guestName } = req.body;
         
-        console.log('📧 GENERATE INVITE - New version called');
+        console.log('📧 GENERATE INVITE - Fixed version called');
         console.log('📧 Request details:', { eventId, guestId, guestName });
 
-        // Convert eventId to integer
-        const numericEventId = parseInt(eventId);
-        
+        // Validate inputs
         if (!guestName) {
             return res.status(400).json({ error: "Guest name is required" });
         }
 
-        // 1. Check if event exists
+        // 1. Check if event exists and get the numeric ID
         console.log('🔍 Checking event exists...');
         const eventCheck = await pool.query(
             'SELECT id, client_name FROM event_plans WHERE id = $1',
-            [numericEventId]
+            [eventId] // Use eventId directly, let PostgreSQL handle the conversion
         );
 
         if (eventCheck.rows.length === 0) {
             return res.status(404).json({ error: "Event not found" });
         }
 
-        console.log('✅ Event found:', eventCheck.rows[0].client_name);
+        const numericEventId = eventCheck.rows[0].id;
+        console.log('✅ Event found:', eventCheck.rows[0].client_name, 'ID:', numericEventId);
 
-        // 2. Find or create guest using mobile_guest_id (NOT by id)
+        // 2. Find or create guest using mobile_guest_id
         console.log('🔍 Looking for guest by mobile_guest_id:', guestId);
         let guestResult = await pool.query(
             'SELECT id, guest_name FROM event_guests WHERE mobile_guest_id = $1 AND event_plan_id = $2',
-            [guestId, numericEventId]  // ← This is the key change!
+            [guestId, numericEventId]
         );
 
         console.log('📋 Guest search result:', guestResult.rows);
@@ -935,7 +934,7 @@ router.post('/:eventId/guests/:guestId/generate-invite', authenticateToken, asyn
 
         // 3. Generate unique token and link
         const inviteToken = require('crypto').randomBytes(32).toString('hex');
-        const inviteLink = `https://wedding-invites-six.vercel.app/?eventId=${numericEventId}&guestId=${dbGuestId}&token=${inviteToken}`;
+        const inviteLink = `https://wedding-invites-six.vercel.app/api/event-plans/invitation-page/${numericEventId}/${dbGuestId}/${inviteToken}`;
         
         console.log('🔗 Generated invitation link:', inviteLink);
 
@@ -955,13 +954,20 @@ router.post('/:eventId/guests/:guestId/generate-invite', authenticateToken, asyn
         res.json({ 
             success: true, 
             inviteLink: inviteLink,
-            embeddedLink: inviteLink,
             message: "Invitation link generated successfully"
         });
         
     } catch (err) {
         console.error("❌ Generate invite error:", err);
         console.error("❌ Error details:", err.message);
+        
+        // More specific error handling
+        if (err.message.includes('invalid input syntax for type integer')) {
+            return res.status(400).json({ 
+                error: "Invalid event ID format. Please check the event ID." 
+            });
+        }
+        
         res.status(500).json({ error: "Failed to generate invitation link: " + err.message });
     }
 });
@@ -1100,7 +1106,7 @@ router.post('/invitation/:eventId/:guestId/:token/respond', async (req, res) => 
     
     // ✅ CREATE NOTIFICATION FOR CLIENT ABOUT RSVP
     const eventResult = await pool.query(
-      `SELECT user_id, client_name FROM event_plans WHERE id = $1`,
+      `SELECT user_uuid, client_name FROM event_plans WHERE id = $1`,
       [numericEventId]
     );
     
@@ -1111,7 +1117,7 @@ router.post('/invitation/:eventId/:guestId/:token/respond', async (req, res) => 
         .from('notifications')
         .insert([
           {
-            user_id: event.user_id,
+            user_uuid: event.user_id,
             type: 'GUEST_RSVP',
             title: 'Guest RSVP Update',
             message: `${guest.guest_name} has ${status.toLowerCase()} your invitation`,

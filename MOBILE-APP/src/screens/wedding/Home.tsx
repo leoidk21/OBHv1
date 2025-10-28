@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets  } from "react-native-safe-area-context";
-import { Animated, StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Modal } from "react-native";
+import { Animated, StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Modal, Button } from "react-native";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp} from "react-native-responsive-screen";
 import { useFonts } from "expo-font";
 import colors from "../config/colors";
@@ -30,6 +30,7 @@ import { useEvent } from '../../context/EventContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 
+import { Alert } from 'react-native'
    type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
    const ProgressBar = ({ progress }: { progress: number }) => {
@@ -64,9 +65,10 @@ import * as SecureStore from 'expo-secure-store';
       const completionStatus = [
          isScheduleComplete,
          isGuestComplete, 
-         isBudgetComplete,
+         isBudgetComplete, 
          isSignatureComplete
       ];
+      
       const completedCount = completionStatus.filter(Boolean).length;
       const totalSections = completionStatus.length;
       const completionPercentage = (completedCount / totalSections) * 100;
@@ -87,13 +89,6 @@ import * as SecureStore from 'expo-secure-store';
          { label: "ESignature", image: ESignatureSvg, route: "ESignature" },
          { label: "Account", image: AccountSvg, route: "Account" },
       ];
-
-      const [progress, setProgress] = useState(0);
-      const [checkboxes, setcheckboxes] = useState({
-         checklist1: false,
-         checklist2: false,
-         checklist3: false,
-      });
 
       // REMINDERS MODAL ONE DAY BEFORE EVENTS
       useEffect(() => {
@@ -140,19 +135,6 @@ import * as SecureStore from 'expo-secure-store';
       };
       // REMINDERS MODAL ONE DAY BEFORE EVENTS
 
-      useEffect(() => {
-         const checkedCount = Object.values(checkboxes).filter(checked => checked).length;
-         const total = Object.keys(checkboxes).length;
-         setProgress((checkedCount / total) * 100);
-      }, [checkboxes]);
-
-      const toggleCheckbox = (key: keyof typeof checkboxes) => {
-         setcheckboxes(prev => ({
-            ...prev,
-            [key]: !prev[key]
-         }));
-      };
-      
       const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
       useEffect(() => {
@@ -225,14 +207,14 @@ import * as SecureStore from 'expo-secure-store';
                <NavigationSlider headerTitle="Home" />
             </View>
             {/* HEADER */}
-            <View>  
 
-            {/* REMINDER MODAL */}
+            <View>  
+               {/* REMINDER MODAL */}
                <Modal
-               visible={showReminderModal}
-               onRequestClose={handleCloseReminder}
-               animationType="slide"
-               transparent={true}
+                  visible={showReminderModal}
+                  onRequestClose={handleCloseReminder}
+                  animationType="slide"
+                  transparent={true}
                >
                <View style={styles.modalOverlay}>
                   <View style={styles.modalContent}>
@@ -370,180 +352,101 @@ import * as SecureStore from 'expo-secure-store';
                   )}
                   {/* END MISSING INFO SECTION */}
 
-                  {/* CHECKLIST */}
-                  {/* <View style={styles.checkList}>
-                     <View style={styles.checkListContainer}>
-                        <Text style={styles.checkListText}>Checklist</Text>
-                        <TouchableOpacity 
-                            onPress={() => navigation.navigate("Checklist" as never)}
-                           style={styles.viewAll}
-                        >
-                           <Text style={styles.viewAllText}>View All</Text>
-                           <FontAwesomeIcon
-                              icon={faChevronRight}
-                              size={12}
-                              color="#343131"
-                           />
-                        </TouchableOpacity>
-                     </View>
-                     <View style={styles.checkListLine}></View>
-
-                     <View style={styles.checkListItems}>
-                        <CheckBox
-                           style={{ padding: 5 }}
-                           onClick={() => toggleCheckbox("checklist1")}
-                           rightText="Set a budget"
-                           isChecked={checkboxes.checklist1}
-                           checkedImage={
-                              <View style={styles.radioChecked}>
-                                 <View style={styles.innerCheckedRadio}>
-                                    <FontAwesomeIcon 
-                                       icon={faCheck} 
-                                       size={12} 
-                                       color="#102E50" 
-                                    />
-                                 </View>
-                              </View>
-                           }
-                           unCheckedImage={<View style={styles.radioUnchecked} />}
-                        />
-                        <CheckBox
-                           style={{ padding: 5 }}
-                           onClick={() => toggleCheckbox("checklist2")}
-                           rightText="Add event time frame"
-                           isChecked={checkboxes.checklist2}
-                           checkedImage={
-                              <View style={styles.radioChecked}>
-                                 <View style={styles.innerCheckedRadio}>
-                                    <FontAwesomeIcon 
-                                       icon={faCheck} 
-                                       size={12}
-                                       color="#102E50" 
-                                    />
-                                 </View>
-                              </View>
-                           }
-                           unCheckedImage={<View style={styles.radioUnchecked} />}
-                        />
-                        <CheckBox
-                           style={{ padding: 5 }}
-                           onClick={() => toggleCheckbox("checklist3")}
-                           rightText="Set your wedding date"
-                           isChecked={checkboxes.checklist3}
-                           checkedImage={
-                              <View style={styles.radioChecked}>
-                                 <View style={styles.innerCheckedRadio}>
-                                    <FontAwesomeIcon 
-                                       icon={faCheck} 
-                                       size={12} 
-                                       color="#102E50" 
-                                    />
-                                 </View>
-                              </View>
-                           }
-                           unCheckedImage={<View style={styles.radioUnchecked} />}
-                        />
-                        <ProgressBar progress={progress} />
-                        <Text style={styles.progressText}>{Math.round(progress)}% Completed</Text>
-                     </View>
-                  </View> */}
-                  {/* CHECKLIST */}
-
                   <View style={styles.notesContainer}>
                      <Text style={styles.notesText}>Complete required fields to submit.</Text>
 
-                  <ScrollView
-                     horizontal
-                     showsHorizontalScrollIndicator={false}
-                     contentContainerStyle={styles.scrollContainer}
-                  >
-                     {/* SCHEDULE */}
-                     <TouchableOpacity
-                        activeOpacity={1}
-                        style={styles.screenContainer}
-                        onPress={() => navigation.navigate("Schedule" as never)}
+                     <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.scrollContainer}
                      >
-                        <View style={styles.screenSection}>
-                        <Text style={styles.screenSectionText}>Schedule</Text>
-                           {isScheduleComplete ? (
-                              <Ionicons name="checkmark-circle" size={18} color="green" />
-                           ) : (
-                              <Ionicons name="alert-circle" size={18} color="red" />
-                           )}
-                        </View>
+                        {/* SCHEDULE */}
+                        <TouchableOpacity
+                           activeOpacity={1}
+                           style={styles.screenContainer}
+                           onPress={() => navigation.navigate("Schedule" as never)}
+                        >
+                           <View style={styles.screenSection}>
+                           <Text style={styles.screenSectionText}>Schedule</Text>
+                              {isScheduleComplete ? (
+                                 <Ionicons name="checkmark-circle" size={18} color="green" />
+                              ) : (
+                                 <Ionicons name="alert-circle" size={18} color="red" />
+                              )}
+                           </View>
+                              <View style={styles.screenItem}>
+                                 <Text style={styles.screenItemText}>Wedding Ceremony</Text>
+                                 <Text style={styles.screenItemText}>
+                                 {formatEventDate(eventData.event_date)}
+                              </Text>
+                           </View>
+                        </TouchableOpacity>
+
+                        {/* GUESTS */}
+                        <TouchableOpacity
+                           activeOpacity={1}
+                           style={styles.screenContainer}
+                           onPress={() => navigation.navigate("Guest" as never)}
+                        >
+                           <View style={styles.screenSection}>
+                           <Text style={styles.screenSectionText}>Guests</Text>
+                              {isGuestComplete ? (
+                                 <Ionicons name="checkmark-circle" size={18} color="green" />
+                              ) : (
+                                 <Ionicons name="alert-circle" size={18} color="red" />
+                              )}
+                           </View>
                            <View style={styles.screenItem}>
-                              <Text style={styles.screenItemText}>Wedding Ceremony</Text>
+                              <Text style={styles.screenItemText}>Total Guests</Text>
                               <Text style={styles.screenItemText}>
-                              {formatEventDate(eventData.event_date)}
-                           </Text>
-                        </View>
-                     </TouchableOpacity>
+                                 {eventData.guest_range || 'Not set'} Pax
+                              </Text>
+                           </View>
+                        </TouchableOpacity>
 
-                     {/* GUESTS */}
-                     <TouchableOpacity
-                        activeOpacity={1}
-                        style={styles.screenContainer}
-                        onPress={() => navigation.navigate("Guest" as never)}
-                     >
-                        <View style={styles.screenSection}>
-                        <Text style={styles.screenSectionText}>Guests</Text>
-                           {isGuestComplete ? (
+                        {/* BUDGET */}
+                        <TouchableOpacity
+                           activeOpacity={1}
+                           style={styles.screenContainer}
+                           onPress={() => navigation.navigate("Budget" as never)}
+                        >
+                           <View style={styles.screenSection}>
+                           <Text style={styles.screenSectionText}>Budget</Text>
+                           {isBudgetComplete ? (
                               <Ionicons name="checkmark-circle" size={18} color="green" />
                            ) : (
                               <Ionicons name="alert-circle" size={18} color="red" />
                            )}
-                        </View>
-                        <View style={styles.screenItem}>
-                           <Text style={styles.screenItemText}>Total Guests</Text>
-                           <Text style={styles.screenItemText}>
-                              {eventData.guest_range || 'Not set'} Pax
-                           </Text>
-                        </View>
-                     </TouchableOpacity>
+                           </View>
+                           <View style={styles.screenItem}>
+                              <Text style={styles.screenItemText}>Total Budget</Text>
+                              <Text style={styles.screenItemText}>
+                                 {eventData.package_price ? `${eventData.package_price}` : 'Not set'}
+                              </Text>
+                           </View>
+                        </TouchableOpacity>
 
-                     {/* BUDGET */}
-                     <TouchableOpacity
-                        activeOpacity={1}
-                        style={styles.screenContainer}
-                        onPress={() => navigation.navigate("Budget" as never)}
-                     >
-                        <View style={styles.screenSection}>
-                        <Text style={styles.screenSectionText}>Budget</Text>
-                        {isBudgetComplete ? (
-                           <Ionicons name="checkmark-circle" size={18} color="green" />
-                        ) : (
-                           <Ionicons name="alert-circle" size={18} color="red" />
-                        )}
-                        </View>
-                        <View style={styles.screenItem}>
-                           <Text style={styles.screenItemText}>Total Budget</Text>
-                           <Text style={styles.screenItemText}>
-                              {eventData.package_price ? `${eventData.package_price}` : 'Not set'}
-                           </Text>
-                        </View>
-                     </TouchableOpacity>
-
-                     {/* E-SIGNATURE */}
-                     <TouchableOpacity
-                        activeOpacity={1}
-                        style={styles.screenContainer}
-                        onPress={() => navigation.navigate("ESignature" as never)}
-                     >
-                        <View style={styles.screenSection}>
-                        <Text style={styles.screenSectionText}>E-Signature</Text>
-                           {isSignatureComplete ? (
-                              <Ionicons name="checkmark-circle" size={18} color="green" />
-                           ) : (
-                              <Ionicons name="alert-circle" size={18} color="red" />
-                           )}
-                        </View>
-                        <View style={styles.screenItem}>
-                           <Text style={styles.screenItemText}>
-                              {isSignatureComplete ? 'Signed' : 'Not signed'}
-                           </Text>
-                        </View>
-                     </TouchableOpacity>
-                  </ScrollView>
+                        {/* E-SIGNATURE */}
+                        <TouchableOpacity
+                           activeOpacity={1}
+                           style={styles.screenContainer}
+                           onPress={() => navigation.navigate("ESignature" as never)}
+                        >
+                           <View style={styles.screenSection}>
+                           <Text style={styles.screenSectionText}>E-Signature</Text>
+                              {isSignatureComplete ? (
+                                 <Ionicons name="checkmark-circle" size={18} color="green" />
+                              ) : (
+                                 <Ionicons name="alert-circle" size={18} color="red" />
+                              )}
+                           </View>
+                           <View style={styles.screenItem}>
+                              <Text style={styles.screenItemText}>
+                                 {isSignatureComplete ? 'Signed' : 'Not signed'}
+                              </Text>
+                           </View>
+                        </TouchableOpacity>
+                     </ScrollView>
                </View>
 
                </ScrollView>

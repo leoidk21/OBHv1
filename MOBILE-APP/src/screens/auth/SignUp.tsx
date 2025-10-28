@@ -8,7 +8,7 @@ import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Alert } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
-
+import { signUpWithEmail } from '../../lib/supabase-auth';
 import { signup } from '../auth/user-auth';
 import { useEvent } from '../../context/EventContext';
 import * as SecureStore from 'expo-secure-store';
@@ -24,50 +24,52 @@ const SignUp = () => {
 
   const handleSignUp = async () => {
     setLoading(true);
-    console.log('Values:', { firstName, lastName, email });
-
+    
     if (!firstName || !lastName || !email || !password) {
       Alert.alert("Error", "Please fill in all fields");
+      setLoading(false);
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Alert.alert("Error", "Please enter a valid email address");
+      setLoading(false);
       return;
     }
 
     try {
-      // 1. Sign up via API
-      const data = await signup(
+      const { user, session } = await signUpWithEmail(
         firstName.trim(),
         lastName.trim(), 
         email.trim(), 
         password.trim()
       );
       
-      const { token, user } = data; // ADD THIS - get the response data
+      if (!user) {
+        throw new Error('User creation failed - no user returned');
+      }
+
       console.log('🆕 NEW USER SIGNED UP:', user.id);
 
-      // 2. ⚠️ CRITICAL: Clear any previous user data
       await resetEventSubmission?.();
 
-      // 3. ⚠️ CRITICAL: Store NEW user credentials
-      await SecureStore.setItemAsync('userToken', token);
+      if (session?.access_token) {
+        await SecureStore.setItemAsync('userToken', session.access_token);
+      }
       await SecureStore.setItemAsync('userId', String(user.id));
-      await SecureStore.setItemAsync('userEmail', user.email);
+      await SecureStore.setItemAsync('userEmail', String(user.email!));
       
       console.log('✅ New user credentials stored:', user.id);
 
-      // 4. Load fresh data for new user
       await loadEventData();
 
-      Alert.alert("Success", "Account created successfully!");
+      Alert.alert("Success", "Account created successfully! Please check your email to verify your account.");
       navigation.navigate("ChooseEvent");
       
     } catch (err: any) {
       console.error('Signup error:', err);
-      Alert.alert("Error", err.error || "Something went wrong");
+      Alert.alert("Error", err.message || "Something went wrong");
     } finally {
       setLoading(false);
     }

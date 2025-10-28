@@ -1,15 +1,23 @@
 const { app, BrowserWindow, Menu } = require('electron')
 const path = require('path')
 
-require('electron-reload')(__dirname, {
-  electron: path.join(__dirname, 'node_modules', '.bin', 'electron'),
-  awaitWriteFinish: true,
-});
+// Development hot reload
+if (process.env.NODE_ENV === 'development') {
+  try {
+    require('electron-reload')(__dirname, {
+      electron: require('electron'),
+      hardResetMethod: 'exit',
+      awaitWriteFinish: true
+    });
+  } catch (error) {
+    console.log('Electron-reload not available in production')
+  }
+}
 
-let win
+let mainWindow
 
 const createWindow = () => {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     background: '#f5f5f5',
@@ -22,16 +30,17 @@ const createWindow = () => {
     }
   })
 
-  win.loadFile(
-  path.join(__dirname, 'src', 'renderer', 'Pages', 'Auth', 'LoginPage.html')
-)
+  mainWindow.loadFile(
+    path.join(__dirname, 'src', 'renderer', 'Pages', 'Auth', 'LoginPage.html')
+  )
 
-  win.webContents.on('context-menu', (event, params) => {
+  // Context menu for development
+  mainWindow.webContents.on('context-menu', (event, params) => {
     const menu = Menu.buildFromTemplate([
       {
         label: 'Inspect Element',
         click: () => {
-          win.webContents.inspectElement(params.x, params.y)
+          mainWindow.webContents.inspectElement(params.x, params.y)
         }
       },
       { type: 'separator' },
@@ -39,7 +48,7 @@ const createWindow = () => {
         label: 'Reload',
         accelerator: 'CmdOrCtrl+R',
         click: () => {
-          win.webContents.reload()
+          mainWindow.webContents.reload()
         }
       }
     ])
@@ -47,19 +56,17 @@ const createWindow = () => {
     menu.popup()
   })
 
-  win.setMenuBarVisibility(false);
+  mainWindow.setMenuBarVisibility(false)
 }
 
 app.whenReady().then(createWindow)
 
-// Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
-// Re-create a window when the app is activated (macOS behavior)
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow()

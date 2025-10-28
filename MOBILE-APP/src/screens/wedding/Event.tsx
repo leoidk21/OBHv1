@@ -21,8 +21,6 @@ import { useEvent } from "../../context/EventContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
-const API_BASE = "https://ela-untraceable-foresakenly.ngrok-free.dev/api";
-
 const Event = () => {
     const { eventData, eventStatus, refreshEventStatus } = useEvent();
     const navigation = useNavigation<NavigationProp<RootStackParamList>>();
@@ -118,7 +116,7 @@ const Event = () => {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'notifications',
-                    filter: `user_id=eq.${userId}`,
+                    filter: `user_uuid=eq.${userId}`,
                 },
                 (payload) => {
                     console.log('📢 REAL-TIME NOTIFICATION:', payload.new);
@@ -191,236 +189,34 @@ const Event = () => {
         );
     };
 
-    // Cancel event function
-    const handleCancelEvent = () => {
-        if (!canCancel) {
-            Alert.alert(
-                "Cancellation Period Expired",
-                "Event cancellation is only allowed within 72 hours of submission. Please contact support for assistance.",
-                [{ text: "OK" }]
-            );
-            return;
-        }
-
-        Alert.alert(
-            "Cancel Event",
-            "Are you sure you want to cancel this event? This action cannot be undone.",
-            [
-                {
-                    text: "Yes, Cancel Event",
-                    style: "destructive",
-                    onPress: () => confirmCancellation()
-                },
-                {
-                    text: "No, Keep Event",
-                    style: "cancel"
-                }
-            ]
-        );
-    };
-
-    const confirmCancellation = async () => {
-        try {
-            console.log('🔄 Starting cancellation process...');
-            setLoading(true);
-            
-            const token = await getAuthToken();
-            
-            if (!token) {
-                console.log('❌ No authentication token found');
-                // ... existing auth error handling ...
-                return;
-            }
-            
-            console.log('✅ Token found and validated');
-            
-            // Get user ID first
-            const userIdStr = await SecureStore.getItemAsync('userId');
-            if (!userIdStr) {
-                Alert.alert("Error", "User ID not found. Please log in again.");
-                return;
-            }
-
-            console.log('👤 User ID:', userIdStr);
-
-            let eventId = null;
-            let eventSource = '';
-
-            // Method 1: Check if eventData from context has ID
-            if (eventData && (eventData.id || eventData.event_id)) {
-                eventId = eventData.id || eventData.event_id;
-                eventSource = 'eventData context';
-                console.log('📋 Event ID from eventData context:', eventId);
-            }
-            // Method 2: Check AsyncStorage eventData_17
-            else {
-                const userEventKey = `eventData_${userIdStr}`;
-                console.log('🔍 Checking AsyncStorage key:', userEventKey);
-                
-                const storedEventData = await AsyncStorage.getItem(userEventKey);
-                if (storedEventData) {
-                    try {
-                        const parsedEventData = JSON.parse(storedEventData);
-                        console.log('📋 Parsed event data structure:', parsedEventData);
-                        
-                        // Since we know the structure from logs, let's work with what we have
-                        // The event might be identified by combination of fields since no explicit ID
-                        
-                        // Option A: Check if there's a hidden ID field we missed
-                        const allKeys = Object.keys(parsedEventData);
-                        console.log('🔑 All keys in event data:', allKeys);
-                        
-                        // Look for any field that might be an ID
-                        const possibleIdFields = ['id', 'event_id', 'eventId', 'eventID', '_id'];
-                        for (const field of possibleIdFields) {
-                            if (parsedEventData[field]) {
-                                eventId = parsedEventData[field];
-                                eventSource = `eventData_17.${field}`;
-                                console.log(`✅ Found event ID: ${eventId} from ${eventSource}`);
-                                break;
-                            }
-                        }
-                        
-                        // Option B: If no explicit ID, we need to get it from the backend using your existing route
-                        if (!eventId) {
-                            console.log('🔍 No explicit ID found, trying to get event ID from backend...');
-                            eventId = await getEventIdFromBackend(token, userIdStr);
-                            eventSource = 'backend lookup';
-                        }
-                        
-                    } catch (parseError) {
-                        console.log('❌ Error parsing stored event data:', parseError);
-                    }
-                }
-            }
-
-            // Method 3: Check eventStatus for event ID
-            if (!eventId && eventStatus && eventStatus.event_id) {
-                eventId = eventStatus.event_id;
-                eventSource = 'eventStatus.event_id';
-                console.log('📋 Event ID from eventStatus:', eventId);
-            }
-
-            // If still no event ID, we need to handle this case
-            if (!eventId) {
-                console.log('❌ No event ID found, cannot proceed with cancellation');
-                Alert.alert(
-                    "Event ID Missing",
-                    "We found your event data but couldn't identify the event ID. Please contact support or create a new event.",
-                    [{ 
-                        text: "Go to Home", 
-                        onPress: () => {
-                            setLoading(false);
-                            navigation.navigate('Home' as never);
-                        }
-                    }]
-                );
-                return;
-            }
-
-            console.log('🎯 Final event ID to cancel:', eventId);
-            console.log('📍 Source:', eventSource);
-
-            const requestBody = {
-                eventId: eventId,
-                reason: "User requested cancellation"
-            };
-            
-            console.log('📦 Request body:', JSON.stringify(requestBody));
-            
-            const response = await fetch(`${API_BASE}/event-plans/cancel`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            console.log('📡 Response status:', response.status);
-            
-            const responseText = await response.text();
-            console.log('📄 Response:', responseText);
-
-            if (response.ok) {
-                const result = JSON.parse(responseText);
-                console.log('✅ Cancellation successful:', result);
-                
-                // Clear event data from storage
-                await AsyncStorage.removeItem(`eventData_${userIdStr}`);
-                
-                Alert.alert(
-                    "Event Cancelled",
-                    "Your event has been cancelled successfully. The admin has been notified.",
-                    [{ text: "OK", onPress: () => navigation.navigate('Home' as never) }]
-                );
-                await refreshEventStatus();
-            } else {
-                console.log('❌ Server error:', responseText);
-                const errorData = JSON.parse(responseText);
-                Alert.alert(
-                    "Cancellation Failed",
-                    errorData.error || "Failed to cancel event. Please try again.",
-                    [{ text: "OK" }]
-                );
-            }
-        } catch (error) {
-            console.error('💥 Cancellation error:', error);
-            Alert.alert(
-                "Error",
-                "Failed to cancel event. Please check your connection and try again.",
-                [{ text: "OK" }]
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
-
     // Add this helper function to get event ID from backend using your existing route
-    const getEventIdFromBackend = async (token: string, userId: string): Promise<string | null> => {
-        try {
-            console.log('🔍 Getting event ID from backend using /event-plans route...');
-            
-            // Use your existing route to get all events for the user
-            const response = await fetch(`${API_BASE}/event-plans`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+    const getEventIdFromBackend = async (userId: string): Promise<string | null> => {
+    try {
+        console.log('🔍 Getting event ID from Supabase...');
+        
+        const { data, error } = await supabase
+        .from('event_plans')
+        .select('id, client_name, event_type, event_date, status')
+        .eq('user_uuid', userId)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-            if (response.ok) {
-                const result = await response.json();
-                console.log('📋 User events from backend /event-plans:', result);
-                
-                if (result.event_plans && result.event_plans.length > 0) {
-                    // Get the most recent event (first in the array since it's ordered by submitted_at DESC)
-                    const mostRecentEvent = result.event_plans[0];
-                    const eventId = mostRecentEvent.id;
-                    console.log('✅ Found most recent event ID from backend:', eventId);
-                    console.log('📋 Event details:', {
-                        id: mostRecentEvent.id,
-                        client_name: mostRecentEvent.client_name,
-                        event_type: mostRecentEvent.event_type,
-                        event_date: mostRecentEvent.event_date,
-                        status: mostRecentEvent.status
-                    });
-                    return eventId;
-                } else {
-                    console.log('❌ No events found for user in backend');
-                }
-            } else {
-                console.log('❌ Backend returned error:', response.status);
-                const errorText = await response.text();
-                console.log('❌ Error details:', errorText);
-            }
-            
-            return null;
-        } catch (error) {
-            console.log('❌ Error getting events from backend:', error);
-            return null;
+        if (error) {
+        console.error('Error getting events:', error);
+        return null;
         }
+
+        if (data && data.length > 0) {
+        const eventId = data[0].id;
+        console.log('✅ Found event ID from Supabase:', eventId);
+        return eventId;
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error getting events:', error);
+        return null;
+    }
     };
 
     const getStatusStyle = (status: string) => {

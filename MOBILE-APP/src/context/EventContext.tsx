@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform, Alert, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard'; // For Expo
 
-const API_BASE = "https://ela-untraceable-foresakenly.ngrok-free.dev/api";
+import { supabase } from '../lib/supabase';
 
 // Storage keys
 const eventKeyFor = (userId: string) => `eventData_${userId}`;
@@ -108,6 +108,53 @@ class StorageMutex {
 
 const storageMutex = new StorageMutex();
 
+const validateUserSession = async (): Promise<{userId: string, token: string} | null> => {
+  try {
+    console.log('🔍 Checking Supabase auth session...');
+    
+    // ✅ Get the current session from Supabase
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('❌ Supabase session error:', sessionError);
+      return null;
+    }
+    
+    if (!session) {
+      console.log('❌ No Supabase session found');
+      return null;
+    }
+    
+    console.log('✅ Supabase session found:', {
+      userId: session.user?.id,
+      email: session.user?.email,
+      expiresAt: session.expires_at
+    });
+    
+    // ✅ Get the token from SecureStore for backup
+    const storedToken = await SecureStore.getItemAsync("userToken");
+    const storedUserId = await SecureStore.getItemAsync("userId");
+    
+    console.log('📦 Stored credentials:', {
+      storedUserId: storedUserId,
+      storedToken: storedToken ? 'exists' : 'missing'
+    });
+    
+    // ✅ Use the session user ID (this should be the UUID)
+    if (session.user) {
+      return { 
+        userId: session.user.id, 
+        token: session.access_token || storedToken || '' 
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('❌ Session validation failed:', error);
+    return null;
+  }
+};
+
 export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const [eventData, setEventData] = useState<Record<string, any>>({});
   const [isInitialized, setIsInitialized] = useState(false);
@@ -122,25 +169,29 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       const session = await validateUserSession();
       if (!session) return null;
 
-      const { token } = session;
+      const { userId } = session; // Get userId from session
       
-      // Get approved events for this user
-      const response = await fetch(`${API_BASE}/event-plans/approved/guests`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      // Get approved events for this user using Supabase
+      const { data, error } = await supabase
+        .from('event_plans')
+        .select('id, status, client_name, event_date')
+        .eq('user_uuid', userId)
+        .eq('status', 'Approved') // Filter for approved events only
+        .order('created_at', { ascending: false }) // Get most recent first
+        .limit(1);
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📋 Approved events:', data.events);
-        
-        if (data.events && data.events.length > 0) {
-          // Return the first approved event ID
-          const eventId = data.events[0].id;
-          console.log('✅ Using event ID:', eventId);
-          return eventId.toString();
-        }
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        return null;
+      }
+
+      console.log('📋 Approved events found:', data?.length || 0);
+      
+      if (data && data.length > 0) {
+        // Return the first approved event ID
+        const eventId = data[0].id;
+        console.log('✅ Using event ID:', eventId);
+        return eventId.toString();
       }
       
       console.log('❌ No approved events found');
@@ -151,75 +202,70 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   };
 
-// In EventContext.tsx - REPLACE THE generateInviteLink FUNCTION
-const generateInviteLink = async (guestId: string, guestName: string): Promise<string> => {
-  try {
-    const session = await validateUserSession();
-    if (!session) throw new Error("Not authenticated");
-
-    const { token } = session;
-    
-    console.log('🔍 DEBUG - Current eventData:', JSON.stringify(eventData, null, 2));
-    
-    // 🚨 CRITICAL FIX: Get the LATEST submitted event ID
-    let eventId = await getLatestSubmittedEventId(token);
-    
-    if (!eventId) {
-      throw new Error("No submitted event found. Please make sure your event is submitted and approved first.");
-    }
-
-    console.log('🚀 Generating link for LATEST EVENT:', { eventId, guestId, guestName });
-
-    const response = await fetch(`${API_BASE}/event-plans/${eventId}/guests/${guestId}/generate-invite`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        guestName: guestName
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Server response:', response.status, errorText);
-      throw new Error(`Failed to generate invitation link: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('✅ Link generated for correct event:', eventId);
-    return data.embeddedLink || data.inviteLink;
-    
-  } catch (error) {
-    console.error('Generate invite error:', error);
-    throw error;
-  }
-};
-
-// 🆕 ADD THIS FUNCTION: Get the LATEST submitted event
-const getLatestSubmittedEventId = async (token: string): Promise<string | null> => {
-  try {
-    console.log('🔄 Fetching latest submitted events...');
-    
-    // Get ALL events for this user, sorted by most recent
-    const response = await fetch(`${API_BASE}/event-plans`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log('📋 All user events:', data.event_plans);
+  const generateInviteLink = async (guestId: string, guestName: string): Promise<string> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
       
-      if (data.event_plans && data.event_plans.length > 0) {
-        // Sort by submitted_at descending to get the most recent
-        const sortedEvents = data.event_plans.sort((a: any, b: any) => 
-          new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
-        );
-        
-        const latestEvent = sortedEvents[0];
+      // Get the latest event for this user
+      const { data: events, error: eventsError } = await supabase
+        .from('event_plans')
+        .select('id, client_name, event_date')
+        .eq('user_uuid', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (eventsError || !events || events.length === 0) {
+        throw new Error("No events found. Please submit an event first.");
+      }
+
+      const event = events[0];
+      
+      // In a real app, you'd generate a proper invite link
+      // For now, we'll create a simple one
+      const inviteLink = `https://wedding-invites-six.vercel.app/invite/${event.id}/${guestId}`;
+      
+      // Update the guest with the invite link
+      const { error: updateError } = await supabase
+        .from('event_guests')
+        .update({ invite_link: inviteLink })
+        .eq('id', guestId);
+
+      if (updateError) throw updateError;
+
+      return inviteLink;
+    } catch (error) {
+      console.error('Error generating invite link:', error);
+      throw error;
+    }
+  };
+
+  const getLatestSubmittedEventId = async (): Promise<string | null> => {
+    try {
+      console.log('🔄 Fetching latest submitted events...');
+      
+      const session = await validateUserSession();
+      if (!session) return null;
+
+      const { userId } = session;
+      
+      // Get ALL events for this user, sorted by most recent using Supabase
+      const { data, error } = await supabase
+        .from('event_plans')
+        .select('id, client_name, event_date, status, submitted_at, created_at')
+        .eq('user_uuid', userId)
+        .order('submitted_at', { ascending: false }) // Sort by submitted_at directly in query
+        .limit(1);
+
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        return null;
+      }
+
+      console.log('📋 All user events:', data);
+      
+      if (data && data.length > 0) {
+        const latestEvent = data[0];
         console.log('🎯 LATEST EVENT FOUND:', {
           id: latestEvent.id,
           client_name: latestEvent.client_name,
@@ -230,48 +276,52 @@ const getLatestSubmittedEventId = async (token: string): Promise<string | null> 
         
         return latestEvent.id.toString();
       }
-    }
-    
-    console.log('❌ No events found for user');
-    return null;
-  } catch (error) {
-    console.error('Error fetching latest event:', error);
-    return null;
-  }
-};
-
-// 🆕 ADD THIS FUNCTION TOO: Get only APPROVED events
-const getLatestApprovedEventId = async (token: string): Promise<string | null> => {
-  try {
-    console.log('🔄 Fetching approved events...');
-    
-    const response = await fetch(`${API_BASE}/event-plans/approved/guests`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log('📋 Approved events:', data.events);
       
-      if (data.events && data.events.length > 0) {
-        // Get the most recent approved event
-        const latestApproved = data.events.sort((a: any, b: any) => 
-          new Date(b.event_date).getTime() - new Date(a.event_date).getTime()
-        )[0];
-        
+      console.log('❌ No events found for user');
+      return null;
+    } catch (error) {
+      console.error('Error fetching latest event:', error);
+      return null;
+    }
+  };
+
+  const getLatestApprovedEventId = async (): Promise<string | null> => {
+    try {
+      console.log('🔄 Fetching approved events...');
+      
+      const session = await validateUserSession();
+      if (!session) return null;
+
+      const { userId } = session;
+      
+      // Get approved events for this user using Supabase
+      const { data, error } = await supabase
+        .from('event_plans')
+        .select('id, client_name, event_date, status, submitted_at')
+        .eq('user_uuid', userId)
+        .eq('status', 'Approved') // Filter for approved events only
+        .order('event_date', { ascending: false }) // Get most recent event date first
+        .limit(1);
+
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        return null;
+      }
+
+      console.log('📋 Approved events:', data);
+      
+      if (data && data.length > 0) {
+        const latestApproved = data[0];
         console.log('🎯 LATEST APPROVED EVENT:', latestApproved);
         return latestApproved.id.toString();
       }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching approved events:', error);
+      return null;
     }
-    
-    return null;
-  } catch (error) {
-    console.error('Error fetching approved events:', error);
-    return null;
-  }
-};
+  };
 
   const copyToClipboard = async (text: string): Promise<void> => {
     try {
@@ -302,22 +352,68 @@ const getLatestApprovedEventId = async (token: string): Promise<string | null> =
     }
   };
 
-  const validateUserSession = async (): Promise<{userId: string, token: string} | null> => {
-    try {
-      const userId = await SecureStore.getItemAsync("userId");
-      const token = await SecureStore.getItemAsync("userToken");
-      
-      if (!userId || !token) {
-        console.log('❌ No valid user session found');
-        return null;
-      }
-      
-      return { userId, token };
-    } catch (error) {
-      console.error('❌ Session validation failed:', error);
-      return null;
-    }
+// ✅ ADD THIS FUNCTION ONCE - around line 350
+const transformBackendToFrontend = (backendEvent: any) => {
+  return {
+    event_type: backendEvent.event_type,
+    wedding_type: backendEvent.category,
+    selected_package: { 
+      pax: backendEvent.package, 
+      price: backendEvent.budget 
+    },
+    package_price: backendEvent.budget,
+    guest_range: backendEvent.guest_count?.toString(),
+    client_name: backendEvent.client_name,
+    partner_name: backendEvent.partner_name,
+    full_client_name: backendEvent.client_name + (backendEvent.partner_name ? ` & ${backendEvent.partner_name}` : ''),
+    event_date: backendEvent.event_date,
+    formatted_event_date: backendEvent.event_date,
+    venue: backendEvent.venue,
+    budget: backendEvent.expenses || [],
+    guests: [],
+    guestCount: backendEvent.guest_count || 0,
+    schedule: [],
+    eSignature: backendEvent.e_signature,
+    status: backendEvent.status
   };
+};
+
+  const recoverEventData = async (): Promise<boolean> => {
+  try {
+    const session = await validateUserSession();
+    if (!session) return false;
+
+    const { userId } = session;
+    console.log('🔄 Attempting data recovery for user:', userId);
+
+    // Try to find ANY events for this user (regardless of status)
+    const { data: events, error } = await supabase
+      .from('event_plans')
+      .select('*')
+      .or(`user_uuid.eq.${userId},user_id.eq.${userId}`) // Check both columns
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('❌ Recovery query error:', error);
+      return false;
+    }
+
+    if (events && events.length > 0) {
+      console.log('✅ Found event in database, recovering...');
+      const eventData = transformBackendToFrontend(events[0]);
+      await AsyncStorage.setItem(eventKeyFor(userId), JSON.stringify(eventData));
+      setEventData(eventData);
+      return true;
+    }
+
+    console.log('❌ No events found for recovery');
+    return false;
+  } catch (error) {
+    console.error('❌ Recovery failed:', error);
+    return false;
+  }
+};
 
   const resetEventState = async (userId?: string): Promise<void> => {
     setEventData({});
@@ -353,66 +449,70 @@ const getLatestApprovedEventId = async (token: string): Promise<string | null> =
     console.log('✅ Complete data clearance for user:', userId);
   };
 
-  // 🚀 ENHANCED: Load event data with proper locking and validation
-  const loadEventData = async (forceReload = false): Promise<void> => {
-    const session = await validateUserSession();
-    if (!session) {
-      setEventData({});
-      setCurrentUserId(null);
-      return;
+const loadEventData = async (): Promise<void> => {
+  const session = await validateUserSession();
+  if (!session) {
+    setEventData({});
+    setCurrentUserId(null);
+    return;
+  }
+
+  const { userId } = session;
+
+  console.log('👤 Loading event data for user:', userId, 'Type:', typeof userId);
+
+  try {
+    setIsLoading(true);
+    
+    // ✅ Check if userId is UUID or integer
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    
+    if (isUUID) {
+      console.log('✅ User ID is UUID, checking backend...');
+      
+      // Check for approved events in backend
+      const { data: approvedEvents, error } = await supabase
+        .from('event_plans')
+        .select('*')
+        .eq('user_uuid', userId)  // Use user_uuid for UUID users
+        .eq('status', 'Approved')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('❌ Error fetching approved events:', error);
+      }
+
+      if (approvedEvents && approvedEvents.length > 0) {
+        console.log('✅ Found approved event in backend');
+        const eventData = transformBackendToFrontend(approvedEvents[0]);
+        await AsyncStorage.setItem(eventKeyFor(userId), JSON.stringify(eventData));
+        setEventData(eventData);
+        return;
+      }
+    } else {
+      console.log('ℹ️ User ID is integer, using old system');
+      // For integer users, use the old logic
     }
 
-    const { userId } = session;
+    // ✅ Fallback to local storage
+    const eventDataString = await AsyncStorage.getItem(eventKeyFor(userId));
+    if (eventDataString) {
+      const parsedData = JSON.parse(eventDataString);
+      setEventData(parsedData);
+      console.log('✅ Loaded from local storage');
+    } else {
+      console.log('📭 No data found anywhere');
+      setEventData({});
+    }
 
-    return storageMutex.runExclusive(userId, async () => {
-      try {
-        setIsLoading(true);
-        
-        console.log('👤 Loading event data for userId:', userId);
-        
-        // Verify session is still valid after lock acquisition
-        const currentSession = await validateUserSession();
-        if (!currentSession || currentSession.userId !== userId) {
-          console.log('⚠️ User changed during load operation, aborting');
-          return;
-        }
-
-        setCurrentUserId(userId);
-
-        // Read from AsyncStorage
-        const eventDataString = await AsyncStorage.getItem(eventKeyFor(userId));
-        console.log('📦 Retrieved event data:', eventDataString ? `Length: ${eventDataString.length}` : 'NULL');
-        
-        if (eventDataString) {
-          try {
-            const parsedData = JSON.parse(eventDataString);
-            
-            // Validate data structure
-            if (parsedData && typeof parsedData === 'object') {
-              console.log('✅ Loaded event data keys:', Object.keys(parsedData));
-              setEventData(parsedData);
-              dataVersion.current++;
-            } else {
-              console.warn('⚠️ Invalid data structure, resetting');
-              await AsyncStorage.removeItem(eventKeyFor(userId));
-              setEventData({});
-            }
-          } catch (parseError) {
-            console.error('❌ Data corruption detected, resetting storage');
-            await AsyncStorage.removeItem(eventKeyFor(userId));
-            setEventData({});
-          }
-        } else {
-          console.log('📭 No event data found, setting empty object');
-          setEventData({});
-        }
-      } catch (error) {
-        console.error('❌ Error loading event data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    });
-  };
+  } catch (error) {
+    console.error('❌ Error loading event data:', error);
+    setEventData({});
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // 🚀 ENHANCED: Update event with atomic operations
   const updateEvent = async (key: string, value: any): Promise<void> => {
@@ -510,29 +610,34 @@ const getLatestApprovedEventId = async (token: string): Promise<string | null> =
     const session = await validateUserSession();
     if (!session) return;
 
-    const { userId, token } = session;
+    const { userId } = session;
 
     try {
-      const response = await fetch(`${API_BASE}/event-plans/status`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "ngrok-skip-browser-warning": "true",
-        },
-      });
+      // Get the latest event status using Supabase
+      const { data, error } = await supabase
+        .from('event_plans')
+        .select('status')
+        .eq('user_uuid', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      if (response.ok) {
-        const statusData = await response.json();
-        const newStatus = statusData.status || 'Pending';
+      if (error) {
+        console.log('No event found or error:', error.message);
+        setEventStatus('Not Found');
+        return;
+      }
+
+      if (data) {
+        const newStatus = data.status || 'Pending';
         setEventStatus(newStatus);
+        console.log('✅ Event status updated:', newStatus);
       } else {
-        console.log('Server response not OK:', response.status);
-        if (response.status === 404) {
-          setEventStatus('Not Found');
-        }
+        setEventStatus('Not Found');
       }
     } catch (error) {
       console.error('❌ Error refreshing event status:', error);
+      setEventStatus('Error');
     }
   };
 
@@ -666,72 +771,76 @@ const getLatestApprovedEventId = async (token: string): Promise<string | null> =
     return "mobile-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
   };
 
-  // Submit to desktop (unchanged except async)
   const submitEventToDesktop = async (): Promise<any> => {
     try {
-      console.log('🚀 Starting submission...');
+      console.log('🚀 Starting submission to Supabase...');
       
-      const session = await validateUserSession();
-      if (!session) throw { error: "Not authenticated" };
-      
-      const { token } = session;
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("Not authenticated");
+
       const eventSummary = getEventSummary();
       
       if (!eventSummary.eSignature) throw new Error("E-Signature required");
 
-      console.log('🌐 Sending to backend...');
-      const response = await fetch(`${API_BASE}/event-plans/submit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "ngrok-skip-browser-warning": "true",
-        },
-        body: JSON.stringify(eventSummary),
-      });
+      console.log('🌐 Saving to Supabase...');
+      
+      // Insert event plan
+      const { data, error } = await supabase
+        .from('event_plans')
+        .insert([
+          {
+            user_uuid: user.id, // ✅ Use the new UUID column
+            event_type: eventSummary.event_type,
+            package: eventSummary.selected_package?.pax,
+            client_name: eventSummary.client_name,
+            partner_name: eventSummary.partner_name,
+            event_date: eventSummary.event_date,
+            guest_count: eventSummary.totalGuests,
+            budget: eventSummary.totalBudget,
+            status: 'Pending',
+            expenses: eventSummary.budget,
+            category: eventSummary.event_type,
+            client_email: eventSummary.client_email,
+            client_phone: eventSummary.client_phone,
+            venue: eventSummary.venue,
+            event_segments: JSON.stringify(eventSummary.schedule),
+          }
+        ])
+        .select()
+        .single();
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Failed: ${response.status} ${errText}`);
+      if (error) {
+        console.error('❌ Supabase insert error:', error);
+        throw new Error(`Failed to save event: ${error.message}`);
       }
 
-      const result = await response.json();
-      console.log('✅ Submission successful');
+      // Insert guests if any
+      if (eventSummary.guests && eventSummary.guests.length > 0) {
+        const guestInserts = eventSummary.guests.map((guest: any) => ({
+          event_plan_id: data.id,
+          guest_name: guest.name,
+          status: guest.status,
+          invite_link: guest.inviteLink,
+        }));
+
+        const { error: guestsError } = await supabase
+          .from('event_guests')
+          .insert(guestInserts);
+
+        if (guestsError) {
+          console.warn('⚠️ Could not save guests:', guestsError);
+        }
+      }
+
+      console.log('✅ Event saved successfully with ID:', data.id);
       
       await markEventAsSubmitted();
 
-      return result;
+      return data;
     } catch (err) {
       console.error('❌ Submission error:', err);
       throw err;
     }
-  };
-
-  // 🚀 ENHANCED: Recover event data
-  const recoverEventData = async (): Promise<boolean> => {
-    const session = await validateUserSession();
-    if (!session) return false;
-
-    const { userId } = session;
-
-    return storageMutex.runExclusive(userId, async () => {
-      try {
-        // Try to load from backup
-        const backupData = await AsyncStorage.getItem(`${eventKeyFor(userId)}_backup`);
-        if (backupData) {
-          console.log('🔄 Recovering data from backup');
-          const parsedData = JSON.parse(backupData);
-          setEventData(parsedData);
-          await AsyncStorage.setItem(eventKeyFor(userId), backupData);
-          await AsyncStorage.removeItem(`${eventKeyFor(userId)}_backup`);
-          return true;
-        }
-        return false;
-      } catch (error) {
-        console.error('❌ Recovery failed:', error);
-        return false;
-      }
-    });
   };
 
   // Debug function
@@ -816,7 +925,7 @@ const getLatestApprovedEventId = async (token: string): Promise<string | null> =
         getGuestStats,
         markEventAsSubmitted,
         resetEventSubmission,
-        loadEventData: () => loadEventData(true),
+        loadEventData: () => loadEventData(),
         isEventSubmitted,
         debugStorageKeys,
         refreshEventStatus,

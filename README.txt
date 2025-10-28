@@ -9,4 +9,3 @@ Delete one or more users’ events from the `event_plans` table.
 
 ```sql
 DELETE FROM event_plans
-WHERE user_id IN (35, 36, 37);

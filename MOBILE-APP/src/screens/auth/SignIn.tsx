@@ -8,6 +8,7 @@ import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Alert } from 'react-native';
 import { useFonts } from 'expo-font';
+import { signInWithEmail } from '../../lib/supabase-auth';
 
 import * as SecureStore from 'expo-secure-store';
 import { login } from '../auth/user-auth';
@@ -23,6 +24,8 @@ const SignIn = () => {
       'Velista': require('../../assets/fonts/VELISTA.ttf'),
   });
 
+  const eventKeyFor = (userId: string) => `eventData_${userId}`;
+
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const emailRef = useRef<TextInput>(null);
@@ -35,46 +38,45 @@ const SignIn = () => {
   };
 
   const navigation: NavigationProp<ParamListBase> = useNavigation();
-  const { loadEventData, resetEventState } = useEvent();
+  const { loadEventData, resetEventState, recoverEventData } = useEvent();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState<boolean>(false);
 
-  const handleSignIn = async () => {
-    setLoading(true);
-    try {
-      const data = await login(email, password);
-      const { token, user } = data;
+const handleSignIn = async () => {
+  setLoading(true);
+  try {
+    const { user, session } = await signInWithEmail(email, password);
+    
+    console.log('🆕 Logging in as:', user.id);
 
-      console.log('Logging in as:', user.id);
-
-      // GET CURRENT USER ID BEFORE STORING NEW ONE
-      const previousUserId = await SecureStore.getItemAsync('userId');
-      
-      // Store NEW user info - FIXED SECURESTORE USAGE
-      await SecureStore.setItemAsync('userToken', token, {});
-      await SecureStore.setItemAsync('userId', String(user.id), {});
-      await SecureStore.setItemAsync('userEmail', user.email, {});
-      console.log('User credentials stored.');
-
-      // CRITICAL: CLEAR REACT STATE WHEN SWITCHING USERS
-      if (previousUserId && previousUserId !== String(user.id)) {
-        console.log('Switching users, clearing React state...');
-        const { resetEventState } = useEvent();
-        await resetEventState();
-      }
-
-      // Now load event data for the NEW user
-      console.log('Loading existing event data for user...');
-      await loadEventData();
-
-      navigation.navigate('Home');
-    } catch (err: any) {
-      Alert.alert("Error", err.error || "Invalid email or password");
-    } finally {
-      setLoading(false);
+    // Store credentials
+    if (session?.access_token) {
+      await SecureStore.setItemAsync('userToken', session.access_token);
     }
-  };
+    await SecureStore.setItemAsync('userId', String(user.id));
+    await SecureStore.setItemAsync('userEmail', String(user.email));
+
+    // ✅ FIRST: Try to load existing data
+    await loadEventData();
+
+    // ✅ SECOND: If no data found, try to recover from backend
+    const currentData = await AsyncStorage.getItem(eventKeyFor(user.id));
+    if (!currentData || currentData === '{}') {
+      console.log('🔄 No local data, attempting recovery...');
+      const recovered = await recoverEventData();
+      if (recovered) {
+        console.log('✅ Data recovered successfully!');
+      }
+    }
+
+    navigation.navigate('Home');
+  } catch (err: any) {
+    Alert.alert("Error", err.message || "Invalid email or password");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Helper function to check for existing data
   const checkForExistingEventData = async (userId: string): Promise<boolean> => {

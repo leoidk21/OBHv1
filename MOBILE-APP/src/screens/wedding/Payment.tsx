@@ -151,97 +151,15 @@ const Payment = () => {
           <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: hp("8%") }}>
             <View style={styles.paymentContainer}>
               <View style={styles.paymentHeader}>
-                <Text style={styles.paymentHeaderTitle}>Payment Pending</Text>
+                <Text style={styles.paymentHeaderTitle}>Payment Reminder - Coordinators Fee</Text>
                 <Text style={styles.paymentSubTitle}>Request by Admin</Text>
                 <Text style={styles.paymentSubText}>
                   Coordinator's Fee for {reminder.event_type}
                 </Text>
               </View>
-              
-              <View style={styles.divider}></View>
-
-              <View>
-                <View style={styles.paymentMethod}>
-                  <Text style={styles.paymentHeaderTitle}>Payment Method:</Text>
-                  <Text style={styles.gcashText}>GCash</Text>
-                </View>
-                <View style={styles.paymentMethod}>
-                  <Text style={styles.paymentHeaderTitle}>Due Date:</Text>
-                  <Text style={styles.deadlineText}>{formatDate(reminder.due_date)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.divider}></View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.paymentHeaderTitle}>GCash Account:</Text>
-                <Text style={styles.paymentSubText}>{reminder.gcash_name}</Text>
-              </View>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={styles.paymentHeaderTitle}>GCash Number:</Text>
-                  <Text style={styles.paymentHeaderTitle}>{reminder.gcash_number}</Text>
-                </View>
-                <TouchableOpacity style={styles.gcashBtn} onPress={() => {}}>
-                  <Text style={styles.gcashBtnText}>Open GCash</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.divider}></View>
-
               <View>
                 <Text style={styles.pendingText}>{reminder.notes}</Text>
               </View>
-            </View>
-
-            {/* UPLOAD PROOF SECTION */}
-            <View style={[styles.paymentContainer, styles.uploadContainer]}>
-              <View>
-                <Text style={styles.paymentHeaderTitle}>Upload your proof of payment here</Text>
-              </View>
-              
-              <View style={styles.divider}></View>
-              
-              <View>
-                <Text style={styles.paymentSubText}>Message</Text>    
-                <TextInput
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  value={message}
-                  onChangeText={setMessage}
-                  style={styles.messageInput}
-                />
-              </View>
-
-              <View style={styles.uploadImageContainer}>
-                {image ? (
-                  <View style={styles.imagePreviewContainer}>
-                    <Image 
-                      source={{ uri: image.uri }} 
-                      style={styles.imagePreview}
-                      resizeMode="contain"
-                    />
-                    <TouchableOpacity style={styles.removeButton} onPress={removeImage}>
-                      <Text style={styles.removeButtonText}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity style={styles.uploadButton} onPress={selectImage}>
-                    <Text style={styles.uploadText}>📷 Tap to upload proof</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <TouchableOpacity 
-                style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]} 
-                onPress={handleUpload}
-                disabled={uploading}
-              >
-                <Text style={styles.uploadButtonText}>
-                  {uploading ? 'Uploading...' : 'Submit Proof'}
-                </Text>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         </LinearGradient>
@@ -252,170 +170,62 @@ const Payment = () => {
 };
 
 const styles = StyleSheet.create({
-    paymentContainer: {
-        height: 'auto',
-        width: wp("90%"),
-        borderRadius: 12,
-        marginVertical: 20,
-        alignSelf: "center",
-        backgroundColor: "white",
-        paddingVertical: wp("5%"),
-        paddingHorizontal: wp("5%"),
-
-        elevation: 3,
-        shadowRadius: 3.84,
-        shadowOpacity: 0.25,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
+  paymentContainer: {
+    marginHorizontal: wp("5%"),
+    marginVertical: hp("1.5%"),
+    padding: wp("4%"),
+    borderRadius: wp("3%"),
+    backgroundColor: '#fff3cd',
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
     },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
 
-    paymentHeader: {
-        flexDirection: "column",
-    },
+  paymentHeader: {
+    marginBottom: hp("1.5%"),
+    paddingBottom: hp("1%"),
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1c40f',
+  },
 
-    paymentHeaderTitle: {
-        fontSize: wp("4%"),
-        paddingBottom: hp("0.5%"),
-    },
+  paymentHeaderTitle: {
+    fontSize: wp("4%"),
+    fontWeight: 'bold',
+    color: '#856404',
+    fontFamily: 'Poppins',
+    marginBottom: hp("0.5%"),
+  },
 
-    paymentSubTitle: {
-        fontSize: wp("3.5%"),
-        color: colors.borderv4,
-    },
+  paymentSubTitle: {
+    fontSize: wp("3.2%"),
+    color: '#b08c2d',
+    fontFamily: 'Poppins',
+    fontStyle: 'italic',
+    marginBottom: hp("0.5%"),
+  },
 
-    paymentSubText: {
-        fontSize: wp("3.5%"),
-        fontFamily: 'Poppins',
-    },
+  paymentSubText: {
+    fontSize: wp("3.5%"),
+    color: '#856404',
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+  },
 
-    paymentMethod: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-    },
+  pendingText: {
+    fontSize: wp("3.5%"),
+    color: '#856404',
+    fontFamily: 'Poppins',
+    lineHeight: hp("2.5%"),
+    textAlign: 'left',
+  },
 
-    gcashText: {
-        fontSize: wp("3.5%"),
-        fontFamily: 'Poppins',
-        color: colors.facebookBtn,
-    },
-
-    deadlineText: {
-        color: colors.red,
-        fontSize: wp("3.5%"),
-        fontFamily: 'Poppins',
-    },
-
-    gcashBtn: {
-        borderRadius: 12,
-        alignItems: "center",
-        marginTop: hp("1.5%"),
-        marginBottom: hp("0.8%"),
-        justifyContent: "center",
-        paddingVertical: hp("1.2%"),
-        backgroundColor: colors.facebookBtn,
-    }, 
-
-    gcashBtnText: {
-        color: colors.white,
-        fontSize: wp("4.2%"),
-        fontFamily: 'Poppins'
-    },
-
-    pendingText: {
-        color: colors.borderv4,
-    },
-
-    divider: {
-        borderWidth: 0.5,
-        marginVertical: hp("1.5%"),
-        borderColor: colors.borderv1,
-    },
-
-    uploadContainer: {
-        marginTop: hp("-1%"),
-    },
-    
-    messageInput: {
-        borderWidth: 0.5,
-        borderRadius: 12,
-        marginTop: hp("1%"),
-        fontSize: wp("4%"),
-        paddingLeft: wp("5%"),
-        color: colors.borderv3,
-        fontFamily: 'Poppins',
-        paddingVertical: hp("1.2%"),
-        borderColor: colors.borderv4,
-    },
-
-    uploadImageContainer: {
-        borderWidth: 1,
-        height: hp("12%"),
-        marginTop: hp("2%"),
-        alignItems: 'center',
-        borderStyle: 'dashed',
-        borderRadius: wp("3%"),
-        justifyContent: 'center',
-        borderColor: colors.borderv4,
-    },
-
-    uploadButton: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
-    uploadText: {
-        fontSize: 16,
-        fontWeight: '500',
-        fontFamily: 'Poppins',
-        color: colors.facebookBtn,
-    },
-
-    uploadSubtext: {
-        fontSize: 12,
-        color: '#666',
-        fontFamily: 'Poppins',
-    },
-
-    imagePreviewContainer: {
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-    },
-
-    imagePreview: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 12,
-    },
-
-    removeButton: {
-        top: 10,
-        right: 10,
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        position: 'absolute',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0,0,0,0.5)',
-    },
-
-    removeButtonText: {},
-
-    uploadButtonText: {
-        width: wp("80%"),
-        borderRadius: 12,
-        marginTop: hp("2%"),
-        color: colors.white,
-        alignItems: "center",
-        textAlign: 'center',
-        fontFamily: 'Poppins',
-        justifyContent: "center",
-        paddingVertical: hp("1.4%"),
-        backgroundColor: '#4CAF50',
-    },
-    
-    uploadButtonDisabled: {},
 });
 
 export default Payment;

@@ -16,8 +16,7 @@ import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-nat
 import { Alert } from "react-native";
 import { useEvent } from '../../context/EventContext';
 import { DateData } from 'react-native-calendars';
-
-const API_BASE = "https://ela-untraceable-foresakenly.ngrok-free.dev/api";
+import { supabase } from "../../lib/supabase";
 
 const ClientsName = () => {
   const insets = useSafeAreaInsets();
@@ -58,21 +57,44 @@ const ClientsName = () => {
 
   const [bookedDates, setBookedDates] = useState<string[]>([]);
 
-  useEffect(() => {
-    const fetchBookedDates = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/event-plans/availability`);
-        const data = await response.json();
-        if (data.success) {
-          setBookedDates(data.bookedDates.map((date: string) => date.split("T")[0]));
-        }
-      } catch (error) {
-        console.error("Error fetching booked dates:", error);
-      }
-    };
+useEffect(() => {
+  const fetchBookedDates = async () => {
+    try {
+      // NEW: Use Supabase directly
+      const { data, error } = await supabase
+        .from('event_plans')
+        .select('event_date')
+        .not('event_date', 'is', null);
 
-    fetchBookedDates();
-  }, []);
+      if (error) {
+        console.error("Error fetching booked dates:", error);
+        return;
+      }
+
+      if (data) {
+        // Extract dates and format them
+        const dates = data
+          .map(item => item.event_date)
+          .filter(date => date) // Remove nulls
+          .map(date => {
+            // Format date to YYYY-MM-DD
+            if (typeof date === 'string') {
+              return date.split('T')[0];
+            }
+            return date;
+          });
+        
+        setBookedDates(dates);
+        console.log(`✅ Found ${dates.length} booked dates`);
+      }
+    } catch (error) {
+      console.error("Error fetching booked dates:", error);
+    }
+  };
+
+  fetchBookedDates();
+}, []);
+
 
   return (
     <SafeAreaProvider>

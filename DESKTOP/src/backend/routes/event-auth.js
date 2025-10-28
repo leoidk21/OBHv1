@@ -27,7 +27,7 @@ const sendEventStatusNotification = async (userId, eventId, status, eventName, r
       .from('notifications')
       .insert([
         {
-          user_id: userId,
+          user_uuid: userId, // ← Change from user_id to user_uuid
           type: 'EVENT_STATUS_UPDATE',
           title: 'Event Status Update',
           message: `Your event "${eventName}" has been ${statusText}`,
@@ -160,7 +160,7 @@ router.get('/', verifyAdminAuth, async (req, res) => {
     const result = await pool.query(
       `SELECT 
         ep.id,
-        ep.user_id,
+        ep.user_uuid,
         ep.event_type,
         ep.package,
         ep.client_name,
@@ -179,7 +179,7 @@ router.get('/', verifyAdminAuth, async (req, res) => {
         CONCAT(mu.first_name, ' ', mu.last_name) AS user_name,
         mu.email AS user_email
        FROM event_plans ep
-       LEFT JOIN mobile_users mu ON ep.user_id = mu.id
+       LEFT JOIN mobile_users mu ON ep.user_uuid = mu.id
        ORDER BY ep.submitted_at DESC`
     );
     

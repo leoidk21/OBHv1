@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform, Share, Linking  } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, KeyboardAvoidingView, Platform, Share } from "react-native";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp} from "react-native-responsive-screen";
 import colors from "../config/colors";
 import { FontAwesomeIcon } from "@fortawesome/react-native-fontawesome";
-import { faChevronRight, faCopy, faPaperPlane } from "@fortawesome/free-solid-svg-icons"; // ADDED ICONS
+import { faChevronRight, faCopy, faPaperPlane, faExclamationTriangle, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
 import Svg, { Path } from "react-native-svg";
 import { Alert } from "react-native";
 import { Guest } from "../../screens/type";
@@ -13,7 +13,6 @@ import NavigationSlider from './ReusableComponents/NavigationSlider';
 import MenuBar from "./ReusableComponents/MenuBar";
 
 import { useEvent } from '../../context/EventContext';
-import * as Clipboard from 'expo-clipboard';
 
 const GuestComponent = () => {
   const {
@@ -24,95 +23,102 @@ const GuestComponent = () => {
     getGuestStats,
     eventData,
     copyToClipboard,
-    shareViaMessenger,
     generateInviteLink,
-    loadEventData // Add this if available in your context
+    loadEventData
   } = useEvent();
 
+  // State for refresh functionality
   const [refreshing, setRefreshing] = useState(false);
 
-  // Refresh guest list
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      // Reload event data which should refresh guests
-      if (loadEventData) {
-        await loadEventData();
-      }
-      // You might need to add a specific refreshGuests method to your context
-      Alert.alert("Success", "Guest list updated");
-    } catch (error) {
-      Alert.alert("Error", "Failed to refresh guest list");
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
+  // Modal and form state management
   const [modalVisible, setModalVisible] = useState(false);
-  const [rsvpModal, setrsvpModal] = useState(false);
   const [selectedRSVP, setSelectedRSVP] = useState(-1);
   const [currentGuestName, setCurrentGuestName] = useState('');
   const [generatingLinks, setGeneratingLinks] = useState<{[key: string]: boolean}>({});
 
-  // Get guests from context
+  // Modal state management for error and success messages
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
+  const [selectedGuestToRemove, setSelectedGuestToRemove] = useState<string | null>(null);
+
+  // Get guests from context using memoization
   const invitedGuests = useMemo(() => getGuests(), [eventData.guests]);
   const guestStats = useMemo(() => getGuestStats(), [eventData.guests]);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  // Local state for guests and search functionality
+  const [guests, setGuests] = useState<Guest[]>([]);
   const [filteredGuests, setFilteredGuests] = useState<Guest[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter guests when search changes
+  // Sync local guests with context guests
+  useEffect(() => {
+    setGuests(invitedGuests);
+  }, [invitedGuests]);
+
+  // Filter guests based on search query
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      setFilteredGuests(invitedGuests);
+      setFilteredGuests(guests);
     } else {
-      const filtered = invitedGuests.filter(guest =>
+      const filtered = guests.filter(guest =>
         guest.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         guest.status.toLowerCase().includes(searchQuery.toLowerCase())
       );
       setFilteredGuests(filtered);
     }
-  }, [searchQuery, invitedGuests]);
+  }, [searchQuery, guests]);
 
-  // Handle generating invitation link
-const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
-  try {
-    setGeneratingLinks(prev => ({ ...prev, [guestId]: true }));
-    
-    console.log('🔍 DEBUG Before generating link:');
-    console.log('   Guest ID:', guestId);
-    console.log('   Guest Name:', guestName);
-    console.log('   Event Data:', eventData);
-    
-    const link = await generateInviteLink(guestId, guestName);
-    
-    console.log('✅ DEBUG After generating link:');
-    console.log('   Generated Link:', link);
-    
-    // Update the guest with the new link
-    updateGuest(guestId, { inviteLink: link });
-    
-    Alert.alert("Success", "Invitation link generated for your LATEST event!");
-    
-  } catch (error: any) {
-    console.error('Generate link error:', error);
-    Alert.alert("Error", error.message || "Failed to generate invitation link");
-  } finally {
-    setGeneratingLinks(prev => ({ ...prev, [guestId]: false }));
-  }
-};
-
-  const handleCopyLink = async (link: string) => {
+  // Refresh guest list function
+  const handleRefresh = async () => {
+    setRefreshing(true);
     try {
-      await copyToClipboard(link);
-      Alert.alert("Copied!", "Invitation link copied to clipboard");
+      if (loadEventData) {
+        await loadEventData();
+      }
     } catch (error) {
-      Alert.alert("Error", "Failed to copy link");
-      console.error('Copy error:', error);
+      showErrorModal("Error", "Failed to refresh guest list");
+    } finally {
+      setRefreshing(false);
     }
   };
 
-  // Handle sharing via Messenger
+  // Handle generating invitation link for a guest
+  const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
+    try {
+      setGeneratingLinks(prev => ({ ...prev, [guestId]: true }));
+      
+      const link = await generateInviteLink(guestId, guestName);
+      
+      // Update the guest with the new link
+      updateGuest(guestId, { inviteLink: link });
+      
+      showSuccessModal("Success", "Invitation link generated!");
+      
+    } catch (error: any) {
+      // Show error modal if link generation fails
+      if (error.message?.includes('No submitted event found')) {
+        showErrorModal("Event Required", "Please submit your event first before generating invitation links.");
+      } else {
+        showErrorModal("Error", error.message || "Failed to generate invitation link");
+      }
+    } finally {
+      setGeneratingLinks(prev => ({ ...prev, [guestId]: false }));
+    }
+  };
+
+  // Handle copying invitation link to clipboard
+  const handleCopyLink = async (link: string) => {
+    try {
+      await copyToClipboard(link);
+      showSuccessModal("Copied!", "Invitation link copied to clipboard");
+    } catch (error) {
+      showErrorModal("Error", "Failed to copy link");
+    }
+  };
+
+  // Handle sharing invitation via messaging apps
   const handleShareViaMessenger = async (link: string, guestName: string) => {
     try {
       const message = `${guestName}, you're invited to our wedding! 🎉 Click here to RSVP: ${link}`;
@@ -122,73 +128,79 @@ const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
         title: 'Wedding Invitation'
       });
     } catch (error) {
-      console.error('Share error:', error);
-      Alert.alert("Error", "Failed to share invitation");
+      showErrorModal("Error", "Failed to share invitation");
     }
   };
 
+  // Handle adding a new guest to the list
   const handleAddGuest = () => {
     if (!currentGuestName.trim()) {
-      Alert.alert('Error', 'Please enter guest name');
-      return;
-    }
-
-    const guestRange = eventData?.guest_range || "0-0";
-    
-    let minGuests = 0;
-    let maxGuests = 0;
-    
-    if (guestRange.includes('-')) {
-      [minGuests, maxGuests] = guestRange.split('-').map((num: string) => parseInt(num.trim(), 10));
-    } else {
-      minGuests = maxGuests = parseInt(guestRange.trim(), 10);
-    }
-
-    // Check guest limit
-    if (guestStats.total >= maxGuests) {
-      Alert.alert(
-        "Guest Limit Reached",
-        `You can only invite up to ${maxGuests} guests for your selected package (${guestRange} pax).`
-      );
+      showErrorModal('Error', 'Please enter guest name');
       return;
     }
 
     const statusOptions = ['Accepted', 'Declined', 'Pending'];
     const guestStatus = selectedRSVP === -1 ? 'Pending' : statusOptions[selectedRSVP];
 
+    // Add new guest with provided details
     addGuest({
       name: currentGuestName.trim(),
       status: guestStatus,
-      inviteLink: "" // Empty initially, will be generated later
+      inviteLink: ""
     });
 
+    // Reset form state
     setCurrentGuestName('');
     setSelectedRSVP(-1);
     setModalVisible(false);
   };
 
-  const handleRemoveGuest = (id: string) => {
-    Alert.alert("Remove guest", "Are you sure you want to remove this guest?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => removeGuest(id),
-      },
-    ]);
+  // Handle guest badge click for removal
+  const handleGuestBadgeClick = (guestId: string) => {
+    const guest = guests.find(g => g.id === guestId);
+    const guestName = guest?.name || 'this guest';
+    
+    // Show confirmation modal
+    setModalTitle("Remove Guest");
+    setModalMessage(`Are you sure you want to remove ${guestName}?`);
+    setSelectedGuestToRemove(guestId);
+    setErrorModalVisible(true);
   };
 
+  // Handle confirmed guest removal
+  const handleConfirmRemove = () => {
+    if (selectedGuestToRemove) {
+      removeGuest(selectedGuestToRemove);
+    }
+    setErrorModalVisible(false);
+    setSelectedGuestToRemove(null);
+  };
+
+  // Reset guest form to initial state
   const resetGuestForm = () => {
     setSelectedRSVP(-1);
     setCurrentGuestName('');
   };
 
+  // Close add guest modal and reset form
   const closeModal = () => {
     setModalVisible(false);
     resetGuestForm();
   };
 
-  const closersvpModal = () => setrsvpModal(false);
+  // Show error modal with custom title and message
+  const showErrorModal = (title: string, message: string) => {
+    setModalTitle(title);
+    setModalMessage(message);
+    setErrorModalVisible(true);
+  };
+
+  // Show success modal with custom title and message
+  const showSuccessModal = (title: string, message: string) => {
+    setModalTitle(title);
+    setModalMessage(message);
+    setSuccessModalVisible(true);
+  };
 
   return (
     <SafeAreaProvider>
@@ -216,6 +228,80 @@ const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
                   clearButtonMode="while-editing"
               />
           </View>
+
+          {/* Error/Confirmation Modal */}
+          <Modal
+            visible={errorModalVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => {
+              setErrorModalVisible(false);
+              setSelectedGuestToRemove(null);
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.messageModalContainer}>
+                <FontAwesomeIcon 
+                  icon={modalTitle === "Remove Guest" ? faExclamationTriangle : faExclamationTriangle} 
+                  size={40} 
+                  color={modalTitle === "Remove Guest" ? "#ffc107" : "#dc3545"} 
+                />
+                <Text style={styles.modalTitle}>{modalTitle}</Text>
+                <Text style={styles.modalMessage}>{modalMessage}</Text>
+                
+                {modalTitle === "Remove Guest" ? (
+                  // CONFIRMATION BUTTONS FOR REMOVE
+                  <View style={styles.confirmationButtons}>
+                    <TouchableOpacity 
+                      style={[styles.modalButton, styles.cancelButton]}
+                      onPress={() => {
+                        setErrorModalVisible(false);
+                        setSelectedGuestToRemove(null);
+                      }}
+                    >
+                      <Text style={styles.modalButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.modalButton, styles.confirmRemoveButton]}
+                      onPress={handleConfirmRemove}
+                    >
+                      <Text style={styles.modalButtonText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  // REGULAR OK BUTTON FOR ERRORS
+                  <TouchableOpacity 
+                    style={[styles.modalButton, styles.errorButton]}
+                    onPress={() => setErrorModalVisible(false)}
+                  >
+                    <Text style={styles.modalButtonText}>OK</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </Modal>
+
+          {/* Success Modal */}
+          <Modal
+            visible={successModalVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setSuccessModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.messageModalContainer}>
+                <FontAwesomeIcon icon={faCheckCircle} size={40} color="#28a745" />
+                <Text style={styles.modalTitle}>{modalTitle}</Text>
+                <Text style={styles.modalMessage}>{modalMessage}</Text>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.successButton]}
+                  onPress={() => setSuccessModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonText}>OK</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
 
           {/* ADD NEW GUEST MODAL */}
           <Modal
@@ -315,6 +401,8 @@ const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
             <ScrollView 
               style={styles.scrollGuests}
               contentContainerStyle={styles.scrollViewContent}
+              horizontal={true}
+              showsHorizontalScrollIndicator={true}
             >
               <View style={styles.guestBadgeContainer}>
                 {/* HEADER */}
@@ -322,11 +410,16 @@ const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
                   <Text style={[styles.guestLabelText, styles.columnName]}>Name</Text>
                   <Text style={[styles.guestLabelText, styles.columnStatus]}>Status</Text>
                   <Text style={[styles.guestLabelText, styles.columnLink]}>Invite Link</Text>
+                  <Text style={[styles.guestLabelText, styles.columnActions]}>Actions</Text>
                 </View>
 
                 {/* ROWS */}
                 {filteredGuests.map((guest) => (
-                  <View key={guest.id} style={styles.guestRow}>
+                  <TouchableOpacity 
+                    key={guest.id} 
+                    style={styles.guestRow}
+                    onPress={() => handleGuestBadgeClick(guest.id)}
+                  >
                     <View style={styles.guestBadge}>
                       <Text style={[styles.filteredGuestText, styles.columnName]}>{guest.name}</Text>
                       <Text
@@ -356,7 +449,10 @@ const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
                         {!guest.inviteLink ? (
                          <TouchableOpacity
                             style={[styles.actionButton, styles.generateButton]}
-                            onPress={() => handleGenerateInviteLink(guest.id, guest.name)}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleGenerateInviteLink(guest.id, guest.name);
+                            }}
                             disabled={generatingLinks[guest.id]}
                           >
                             <Text style={styles.actionButtonText}>
@@ -367,27 +463,27 @@ const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
                           <>
                             <TouchableOpacity 
                               style={[styles.actionButton, styles.copyButton]}
-                              onPress={() => handleCopyLink(guest.inviteLink!)}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleCopyLink(guest.inviteLink!);
+                              }}
                             >
                               <FontAwesomeIcon icon={faCopy} size={14} color="white" />
                             </TouchableOpacity>
                             <TouchableOpacity 
                               style={[styles.actionButton, styles.shareButton]}
-                              onPress={() => handleShareViaMessenger(guest.inviteLink!, guest.name)}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleShareViaMessenger(guest.inviteLink!, guest.name);
+                              }}
                             >
                               <FontAwesomeIcon icon={faPaperPlane} size={14} color="white" />
                             </TouchableOpacity>
                           </>
                         )}
-                        <TouchableOpacity 
-                          style={[styles.actionButton, styles.deleteButton]}
-                          onPress={() => handleRemoveGuest(guest.id)}
-                        >
-                          <Text style={styles.deleteButtonText}>×</Text>
-                        </TouchableOpacity>
                       </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
               
@@ -401,6 +497,7 @@ const handleGenerateInviteLink = async (guestId: string, guestName: string) => {
             </ScrollView>
           </View>
 
+          {/* ADD GUEST BUTTON */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
                 <Text style={styles.buttonText}>+</Text>
@@ -434,7 +531,7 @@ const styles = StyleSheet.create({
     height: hp("5.5%"),
   },
 
-  // ADD NEW GUEST MODAL styles
+  // MODAL styles
   modalOverlay: {
     top: 0,
     left: 0,
@@ -608,10 +705,12 @@ const styles = StyleSheet.create({
   },
 
   scrollViewContent: {
+    minWidth: wp("100%"),
     paddingBottom: hp("10%"),
   },
 
   guestBadgeContainer: {
+    minWidth: wp("90%"),
     alignItems: "center",
     marginBottom: hp("2%"),
     marginHorizontal: wp("5%"),
@@ -626,6 +725,7 @@ const styles = StyleSheet.create({
     paddingVertical: hp("1.6%"),
     paddingHorizontal: wp("3%"),
     backgroundColor: colors.borderv2,
+    minWidth: wp("80%"),
   },
 
   guestBadge: {
@@ -639,10 +739,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp("3%"),
     backgroundColor: colors.white,
     borderColor: colors.borderv2,
+    minWidth: wp("80%"),
+  },
+
+  guestRow: {
+    width: "100%",
+    borderRadius: wp("2%"),
+    marginBottom: hp("1%"),
   },
 
   guestLabelText: {
-    fontWeight: 600,
+    fontWeight: "600",
     textAlign: "center",
     color: colors.black,
     fontFamily: 'Poppins',
@@ -655,15 +762,128 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins',
   },
 
-  columnName: { flex: 2, textAlign: "left" },
-  columnStatus: { flex: 1, textAlign: "center" },
-  columnLink: { flex: 2, textAlign: "right" },
+  columnName: { 
+    flex: 2, 
+    textAlign: "left",
+    minWidth: wp("25%"),
+  },
+  columnStatus: { 
+    flex: 1, 
+    textAlign: "center",
+    minWidth: wp("15%"),
+  },
+  columnLink: { 
+    flex: 2, 
+    textAlign: "right",
+    minWidth: wp("25%"),
+  },
+  columnActions: {
+    flex: 1.5,
+    minWidth: wp("25%"),
+  },
 
-  deleteButton: {},
-  deleteButtonText: {},
+  linkContainer: {
+    flex: 2,
+    paddingHorizontal: 5,
+    justifyContent: 'center',
+  },
+  actionsContainer: {
+    flex: 1.5,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    gap: 6,
+  },
 
-  noResultsContainer: {},
-  noResultsText: {},
+  inviteLinkText: {
+    fontSize: 12,
+    color: '#0066cc',
+    fontFamily: 'monospace',
+  },
+  noLinkText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+  },
+
+  actionButton: {
+    padding: 8,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+  },
+
+  generateButton: {
+    backgroundColor: '#4CAF50',
+    width: 80,
+  },
+  copyButton: {
+    backgroundColor: '#2196F3',
+  },
+  shareButton: {
+    backgroundColor: '#0084ff',
+  },
+
+  actionButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+
+  // MESSAGE MODAL styles
+  messageModalContainer: {
+    width: wp("80%"),
+    padding: wp("5%"),
+    borderRadius: wp("4%"),
+    alignItems: 'center',
+    backgroundColor: colors.white,
+  },
+
+  modalButton: {
+    padding: wp("3%"),
+    borderRadius: wp("2%"),
+    marginTop: hp("2%"),
+    minWidth: wp("30%"),
+    alignItems: 'center',
+  },
+
+  errorButton: {
+    backgroundColor: '#dc3545',
+  },
+  successButton: {
+    backgroundColor: '#28a745',
+  },
+  cancelButton: {
+    backgroundColor: '#6c757d',
+  },
+  confirmRemoveButton: {
+    backgroundColor: '#dc3545',
+  },
+
+  modalButtonText: {
+    color: colors.white,
+    fontWeight: 'bold',
+  },
+
+  modalMessage: {
+    fontSize: wp("4%"),
+    textAlign: 'center',
+    marginTop: hp("2%"),
+    fontFamily: 'Poppins',
+    color: colors.black,
+  },
+
+  confirmationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: hp("2%"),
+    gap: 10,
+  },
 
   // FLOATING BUTTON styles
   buttonContainer: {
@@ -689,81 +909,13 @@ const styles = StyleSheet.create({
   },
 
   // Unused styles
+  noResultsContainer: {},
+  noResultsText: {},
   saveSideRelationship: {},
-  rsvpStatusContainer: {
-    borderWidth: 1,
-    borderRadius: 9,
-    width: wp("76%"),
-    alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: hp("1.5%"),
-    paddingVertical: hp("1.5%"),
-    paddingHorizontal: wp("3%"),
-    borderColor: colors.borderv3,
-    justifyContent: "space-between",
-  },
-  rsvpText: {
-    color: colors.black,
-    fontFamily: 'Poppins',
-    marginTop: hp("1.5%"),
-    marginHorizontal: wp("5%"),
-  },
-
-    guestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingVertical: 10,
-  },
-  linkContainer: {
-    flex: 2,
-    paddingHorizontal: 5,
-    justifyContent: 'center',
-  },
-  actionsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 5,
-  },
-  inviteLinkText: {
-    fontSize: 12,
-    color: '#0066cc',
-    fontFamily: 'monospace',
-  },
-  noLinkText: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 5,
-    marginHorizontal: 2,
-    minWidth: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  generateButton: {
-    backgroundColor: '#4CAF50',
-  },
-  copyButton: {
-    backgroundColor: '#2196F3',
-  },
-  shareButton: {
-    backgroundColor: '#0084ff',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  columnActions: {
-    flex: 1.5,
-  },
+  rsvpStatusContainer: {},
+  rsvpText: {},
 });
+
 const getStatusColor = (status: string): string => {
   const statusColors = {
     Accepted: '#4CAF50',

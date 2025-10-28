@@ -11,7 +11,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import colors from "../config/colors";
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
 import { Alert } from "react-native";
-
 import { useEvent } from '../../context/EventContext';
 
 const ClientsName = () => {
