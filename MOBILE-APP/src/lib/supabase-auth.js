@@ -2,7 +2,6 @@
 import { supabase } from './supabase';
 import * as SecureStore from 'expo-secure-store';
 
-
 // Authentication functions
 export const signUpWithEmail = async (firstName, lastName, email, password) => {
   try {
@@ -25,7 +24,7 @@ export const signUpWithEmail = async (firstName, lastName, email, password) => {
         .from('mobile_users')
         .insert([
           {
-            auth_uid: data.user.id, // Store Supabase UUID here
+            auth_uid: data.user.id,
             first_name: firstName,
             last_name: lastName,
             email: email,

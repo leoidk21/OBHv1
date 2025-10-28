@@ -26,6 +26,8 @@ interface Guest {
   name: string;
   status: string;
   inviteLink: string;
+  guest_name?: string; // Add this for database compatibility
+  invite_link?: string; // Add this for database compatibility
 }
 
 interface Expense {
@@ -164,46 +166,60 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
   const dataVersion = useRef(0);
 
-  const getCurrentEventId = async (): Promise<string | null> => {
+  // GET CURRENT EVENT ID
+  const validateUserSession = async (): Promise<{userId: string, token: string} | null> => {
     try {
-      const session = await validateUserSession();
-      if (!session) return null;
-
-      const { userId } = session; // Get userId from session
+      console.log('🔍 Checking Supabase auth session...');
       
-      // Get approved events for this user using Supabase
-      const { data, error } = await supabase
-        .from('event_plans')
-        .select('id, status, client_name, event_date')
-        .eq('user_uuid', userId)
-        .eq('status', 'Approved') // Filter for approved events only
-        .order('created_at', { ascending: false }) // Get most recent first
-        .limit(1);
-
-      if (error) {
-        console.error('❌ Supabase error:', error);
-        return null;
-      }
-
-      console.log('📋 Approved events found:', data?.length || 0);
+      // ✅ Get the current session from Supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (data && data.length > 0) {
-        // Return the first approved event ID
-        const eventId = data[0].id;
-        console.log('✅ Using event ID:', eventId);
-        return eventId.toString();
+      if (sessionError) {
+        console.error('❌ Supabase session error:', sessionError);
+        return null; // Explicit return
       }
       
-      console.log('❌ No approved events found');
+      if (!session) {
+        console.log('❌ No Supabase session found');
+        return null; // Explicit return
+      }
+      
+      console.log('✅ Supabase session found:', {
+        userId: session.user?.id,
+        email: session.user?.email,
+        expiresAt: session.expires_at
+      });
+      
+      // ✅ Get the token from SecureStore for backup
+      const storedToken = await SecureStore.getItemAsync("userToken");
+      const storedUserId = await SecureStore.getItemAsync("userId");
+      
+      console.log('📦 Stored credentials:', {
+        storedUserId: storedUserId,
+        storedToken: storedToken ? 'exists' : 'missing'
+      });
+      
+      // ✅ Use the session user ID (this should be the UUID)
+      if (session.user) {
+        return { 
+          userId: session.user.id, 
+          token: session.access_token || storedToken || '' 
+        }; // Explicit return
+      }
+      
+      // ✅ Explicit return null if no user found
       return null;
+      
     } catch (error) {
-      console.error('Error getting event ID:', error);
-      return null;
+      console.error('❌ Session validation failed:', error);
+      return null; // Explicit return
     }
   };
 
   const generateInviteLink = async (guestId: string, guestName: string): Promise<string> => {
     try {
+      console.log('🔗 Generating invite link for:', { guestId, guestName });
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
       
@@ -221,25 +237,101 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
       const event = events[0];
       
-      // In a real app, you'd generate a proper invite link
-      // For now, we'll create a simple one
-      const inviteLink = `https://wedding-invites-six.vercel.app/invite/${event.id}/${guestId}`;
+      // Generate a simple token
+      const inviteToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
       
-      // Update the guest with the invite link
+      // Generate the invite link using the frontend URL
+      const inviteLink = `https://wedding-invites-six.vercel.app/invite/${event.id}/${guestId}/${inviteToken}`;
+      
+      console.log('🔗 Generated invite link:', inviteLink);
+      
+      // Try multiple ways to find the guest
+      let guestData;
+      
+      // First try: Find by mobile_guest_id (string)
+      const { data: guestByMobileId, error: mobileError } = await supabase
+        .from('event_guests')
+        .select('id')
+        .eq('mobile_guest_id', guestId)
+        .eq('event_plan_id', event.id)
+        .single();
+
+      if (!mobileError && guestByMobileId) {
+        guestData = guestByMobileId;
+        console.log('✅ Found guest by mobile_guest_id');
+      } else {
+        // Second try: Find by numeric ID (if guestId is a number)
+        const numericGuestId = parseInt(guestId);
+        if (!isNaN(numericGuestId)) {
+          const { data: guestById, error: idError } = await supabase
+            .from('event_guests')
+            .select('id')
+            .eq('id', numericGuestId)
+            .eq('event_plan_id', event.id)
+            .single();
+
+          if (!idError && guestById) {
+            guestData = guestById;
+            console.log('✅ Found guest by numeric ID');
+          }
+        }
+        
+        // Third try: Find by guest_name as fallback
+        if (!guestData) {
+          const { data: guestByName, error: nameError } = await supabase
+            .from('event_guests')
+            .select('id')
+            .eq('guest_name', guestName)
+            .eq('event_plan_id', event.id)
+            .single();
+
+          if (!nameError && guestByName) {
+            guestData = guestByName;
+            console.log('✅ Found guest by name');
+          }
+        }
+      }
+
+      if (!guestData) {
+        console.error('❌ Guest not found in database. Available guests:');
+        
+        // Debug: List all guests for this event
+        const { data: allGuests, error: listError } = await supabase
+          .from('event_guests')
+          .select('id, guest_name, mobile_guest_id, event_plan_id')
+          .eq('event_plan_id', event.id);
+
+        if (!listError && allGuests) {
+          console.log('📋 All guests for event:', allGuests);
+        }
+        
+        throw new Error(`Guest "${guestName}" not found in database for event ${event.id}`);
+      }
+
+      // Use the numeric database ID to update the guest
       const { error: updateError } = await supabase
         .from('event_guests')
-        .update({ invite_link: inviteLink })
-        .eq('id', guestId);
+        .update({ 
+          invite_link: inviteLink,
+          invite_token: inviteToken
+        })
+        .eq('id', guestData.id); // Use the numeric database ID
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('❌ Error updating guest with invite link:', updateError);
+        throw updateError;
+      }
 
+      console.log('✅ Guest updated with invite link successfully');
       return inviteLink;
+      
     } catch (error) {
-      console.error('Error generating invite link:', error);
+      console.error('❌ Error generating invite link:', error);
       throw error;
     }
   };
 
+  // GET LATEST SUBMITTED EVENT
   const getLatestSubmittedEventId = async (): Promise<string | null> => {
     try {
       console.log('🔄 Fetching latest submitted events...');
@@ -285,6 +377,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   };
 
+  // GET LATEST APPROVED EVENT
   const getLatestApprovedEventId = async (): Promise<string | null> => {
     try {
       console.log('🔄 Fetching approved events...');
@@ -323,6 +416,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   };
 
+  // COPY TO CLIPBOARD
   const copyToClipboard = async (text: string): Promise<void> => {
     try {
       // React Native only - using expo-clipboard
@@ -334,6 +428,7 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   };
 
+  // SHARE VIA MESSANGER
   const shareViaMessenger = async (link: string, guestName?: string): Promise<void> => {
     try {
       const message = guestName 
@@ -352,75 +447,169 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     }
   };
 
-// ✅ ADD THIS FUNCTION ONCE - around line 350
-const transformBackendToFrontend = (backendEvent: any) => {
-  return {
-    event_type: backendEvent.event_type,
-    wedding_type: backendEvent.category,
-    selected_package: { 
-      pax: backendEvent.package, 
-      price: backendEvent.budget 
-    },
-    package_price: backendEvent.budget,
-    guest_range: backendEvent.guest_count?.toString(),
-    client_name: backendEvent.client_name,
-    partner_name: backendEvent.partner_name,
-    full_client_name: backendEvent.client_name + (backendEvent.partner_name ? ` & ${backendEvent.partner_name}` : ''),
-    event_date: backendEvent.event_date,
-    formatted_event_date: backendEvent.event_date,
-    venue: backendEvent.venue,
-    budget: backendEvent.expenses || [],
-    guests: [],
-    guestCount: backendEvent.guest_count || 0,
-    schedule: [],
-    eSignature: backendEvent.e_signature,
-    status: backendEvent.status
+  // TRANSFORM BACKEND TO FRONTEND
+  const transformBackendToFrontend = async (backendEvent: any) => {
+    try {
+      // Load guests from event_guests table with proper typing
+      let guests: Guest[] = []; // Explicitly type as Guest[]
+      if (backendEvent.id) {
+        const { data: guestsData, error } = await supabase
+          .from('event_guests')
+          .select('*')
+          .eq('event_plan_id', backendEvent.id);
+        
+        if (!error && guestsData) {
+          guests = guestsData.map(guest => ({
+            id: guest.id?.toString() || '',
+            name: guest.guest_name || '',
+            status: guest.status || 'Pending',
+            inviteLink: guest.invite_link || '',
+            guest_name: guest.guest_name, // Keep for compatibility
+            invite_link: guest.invite_link // Keep for compatibility
+          }));
+        }
+      }
+
+      // Parse event segments with proper typing
+      let schedule: EventSegment[] = []; // Explicitly type as EventSegment[]
+      if (backendEvent.event_segments) {
+        try {
+          if (typeof backendEvent.event_segments === 'string') {
+            const parsed = JSON.parse(backendEvent.event_segments);
+            schedule = Array.isArray(parsed) ? parsed : [];
+          } else if (Array.isArray(backendEvent.event_segments)) {
+            schedule = backendEvent.event_segments;
+          }
+        } catch (e) {
+          console.error('Error parsing event segments:', e);
+          schedule = [];
+        }
+      }
+
+      // Parse expenses/budget with proper typing
+      let budget: Expense[] = []; // Explicitly type as Expense[]
+      if (backendEvent.expenses) {
+        try {
+          if (typeof backendEvent.expenses === 'string') {
+            const parsed = JSON.parse(backendEvent.expenses);
+            budget = Array.isArray(parsed) ? parsed : [];
+          } else if (Array.isArray(backendEvent.expenses)) {
+            budget = backendEvent.expenses;
+          }
+        } catch (e) {
+          console.error('Error parsing expenses:', e);
+          budget = [];
+        }
+      }
+
+      return {
+        event_type: backendEvent.event_type,
+        wedding_type: backendEvent.category,
+        selected_package: { 
+          pax: backendEvent.package, 
+          price: backendEvent.budget 
+        },
+        package_price: backendEvent.budget,
+        guest_range: backendEvent.guest_count?.toString(),
+        client_name: backendEvent.client_name,
+        partner_name: backendEvent.partner_name,
+        full_client_name: backendEvent.client_name + (backendEvent.partner_name ? ` & ${backendEvent.partner_name}` : ''),
+        event_date: backendEvent.event_date,
+        formatted_event_date: backendEvent.event_date,
+        venue: backendEvent.venue,
+        budget: budget,
+        guests: guests,
+        guestCount: backendEvent.guest_count || guests.length,
+        schedule: schedule,
+        eSignature: backendEvent.e_signature,
+        status: backendEvent.status,
+        client_email: backendEvent.client_email,
+        client_phone: backendEvent.client_phone
+      };
+    } catch (error) {
+      console.error('Error in transformBackendToFrontend:', error);
+      return {
+        event_type: backendEvent.event_type,
+        wedding_type: backendEvent.category,
+        selected_package: { pax: backendEvent.package, price: backendEvent.budget },
+        package_price: backendEvent.budget,
+        guest_range: backendEvent.guest_count?.toString(),
+        client_name: backendEvent.client_name,
+        partner_name: backendEvent.partner_name,
+        full_client_name: backendEvent.client_name + (backendEvent.partner_name ? ` & ${backendEvent.partner_name}` : ''),
+        event_date: backendEvent.event_date,
+        formatted_event_date: backendEvent.event_date,
+        venue: backendEvent.venue,
+        budget: [] as Expense[],
+        guests: [] as Guest[],
+        guestCount: backendEvent.guest_count || 0,
+        schedule: [] as EventSegment[],
+        eSignature: backendEvent.e_signature,
+        status: backendEvent.status,
+        client_email: backendEvent.client_email,
+        client_phone: backendEvent.client_phone
+      };
+    }
   };
-};
 
+  // RECOVER EVENT DATA
   const recoverEventData = async (): Promise<boolean> => {
-  try {
-    const session = await validateUserSession();
-    if (!session) return false;
+    try {
+      const session = await validateUserSession();
+      if (!session) return false;
 
-    const { userId } = session;
-    console.log('🔄 Attempting data recovery for user:', userId);
+      const { userId } = session;
+      console.log('🔄 Attempting data recovery for user:', userId);
 
-    // Try to find ANY events for this user (regardless of status)
-    const { data: events, error } = await supabase
-      .from('event_plans')
-      .select('*')
-      .or(`user_uuid.eq.${userId},user_id.eq.${userId}`) // Check both columns
-      .order('created_at', { ascending: false })
-      .limit(1);
+      // Check if userId is UUID or integer
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
 
-    if (error) {
-      console.error('❌ Recovery query error:', error);
+      let query = supabase
+        .from('event_plans')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      // Use the appropriate column based on userId type
+      if (isUUID) {
+        console.log('✅ User ID is UUID, using user_uuid column');
+        query = query.eq('user_uuid', userId);
+      } else {
+        console.log('✅ User ID is integer, using user_id column');
+        query = query.eq('user_id', parseInt(userId));
+      }
+
+      const { data: events, error } = await query;
+
+      if (error) {
+        console.error('❌ Recovery query error:', error);
+        return false;
+      }
+
+      if (events && events.length > 0) {
+        console.log('✅ Found event in database, recovering...');
+        const eventData = await transformBackendToFrontend(events[0]);
+        await AsyncStorage.setItem(eventKeyFor(userId), JSON.stringify(eventData));
+        setEventData(eventData);
+        return true;
+      }
+
+      console.log('❌ No events found for recovery');
+      return false;
+    } catch (error) {
+      console.error('❌ Recovery failed:', error);
       return false;
     }
+  };
 
-    if (events && events.length > 0) {
-      console.log('✅ Found event in database, recovering...');
-      const eventData = transformBackendToFrontend(events[0]);
-      await AsyncStorage.setItem(eventKeyFor(userId), JSON.stringify(eventData));
-      setEventData(eventData);
-      return true;
-    }
-
-    console.log('❌ No events found for recovery');
-    return false;
-  } catch (error) {
-    console.error('❌ Recovery failed:', error);
-    return false;
-  }
-};
-
+  // RESET EVENT STATE
   const resetEventState = async (userId?: string): Promise<void> => {
     setEventData({});
     setEventStatus('Pending');
     setCurrentUserId(null);
   };
 
+  // CLEAR ALL USER DATA
   const clearAllUserData = async (userId: string): Promise<void> => {
     console.log('🧹 Clearing ALL data for user:', userId);
     
@@ -449,72 +638,91 @@ const transformBackendToFrontend = (backendEvent: any) => {
     console.log('✅ Complete data clearance for user:', userId);
   };
 
-const loadEventData = async (): Promise<void> => {
-  const session = await validateUserSession();
-  if (!session) {
-    setEventData({});
-    setCurrentUserId(null);
-    return;
-  }
-
-  const { userId } = session;
-
-  console.log('👤 Loading event data for user:', userId, 'Type:', typeof userId);
-
-  try {
-    setIsLoading(true);
-    
-    // ✅ Check if userId is UUID or integer
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-    
-    if (isUUID) {
-      console.log('✅ User ID is UUID, checking backend...');
-      
-      // Check for approved events in backend
-      const { data: approvedEvents, error } = await supabase
-        .from('event_plans')
-        .select('*')
-        .eq('user_uuid', userId)  // Use user_uuid for UUID users
-        .eq('status', 'Approved')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        console.error('❌ Error fetching approved events:', error);
-      }
-
-      if (approvedEvents && approvedEvents.length > 0) {
-        console.log('✅ Found approved event in backend');
-        const eventData = transformBackendToFrontend(approvedEvents[0]);
-        await AsyncStorage.setItem(eventKeyFor(userId), JSON.stringify(eventData));
-        setEventData(eventData);
-        return;
-      }
-    } else {
-      console.log('ℹ️ User ID is integer, using old system');
-      // For integer users, use the old logic
-    }
-
-    // ✅ Fallback to local storage
-    const eventDataString = await AsyncStorage.getItem(eventKeyFor(userId));
-    if (eventDataString) {
-      const parsedData = JSON.parse(eventDataString);
-      setEventData(parsedData);
-      console.log('✅ Loaded from local storage');
-    } else {
-      console.log('📭 No data found anywhere');
+  // LOAD EVENT DATA
+  const loadEventData = async (): Promise<void> => {
+    const session = await validateUserSession();
+    if (!session) {
       setEventData({});
+      setCurrentUserId(null);
+      return;
     }
 
-  } catch (error) {
-    console.error('❌ Error loading event data:', error);
-    setEventData({});
-  } finally {
-    setIsLoading(false);
-  }
-};
+    const { userId } = session;
 
-  // 🚀 ENHANCED: Update event with atomic operations
+    console.log('👤 Loading event data for user:', userId, 'Type:', typeof userId);
+
+    try {
+      setIsLoading(true);
+      
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      
+      if (isUUID) {
+        console.log('✅ User ID is UUID, checking backend...');
+        
+        // Check for approved events in backend using user_uuid
+        const { data: approvedEvents, error } = await supabase
+          .from('event_plans')
+          .select('*')
+          .eq('user_uuid', userId)  // Use user_uuid for UUID users
+          .eq('status', 'Approved')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('❌ Error fetching approved events:', error);
+        }
+
+        if (approvedEvents && approvedEvents.length > 0) {
+          console.log('✅ Found approved event in backend');
+          const eventData = await transformBackendToFrontend(approvedEvents[0]);
+          await AsyncStorage.setItem(eventKeyFor(userId), JSON.stringify(eventData));
+          setEventData(eventData);
+          return;
+        }
+      } else {
+        console.log('ℹ️ User ID is integer, using user_id column');
+        // For integer users, use user_id column
+        const { data: approvedEvents, error } = await supabase
+          .from('event_plans')
+          .select('*')
+          .eq('user_id', parseInt(userId))  // Use user_id for integer users
+          .eq('status', 'Approved')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('❌ Error fetching approved events:', error);
+        }
+
+        if (approvedEvents && approvedEvents.length > 0) {
+          console.log('✅ Found approved event in backend');
+          const eventData = await transformBackendToFrontend(approvedEvents[0]);
+          await AsyncStorage.setItem(eventKeyFor(userId), JSON.stringify(eventData));
+          setEventData(eventData);
+          return;
+        }
+      }
+
+      // ✅ Fallback to local storage
+      const eventDataString = await AsyncStorage.getItem(eventKeyFor(userId));
+      if (eventDataString) {
+        const parsedData = JSON.parse(eventDataString);
+        setEventData(parsedData);
+        console.log('✅ Loaded from local storage');
+      } else {
+        console.log('📭 No data found anywhere');
+        setEventData({});
+      }
+
+    } catch (error) {
+      console.error('❌ Error loading event data:', error);
+      setEventData({});
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // UPDATE AN EVENT
   const updateEvent = async (key: string, value: any): Promise<void> => {
     const session = await validateUserSession();
     if (!session) {
@@ -574,7 +782,7 @@ const loadEventData = async (): Promise<void> => {
     });
   };
 
-  // 🚀 ENHANCED: Mark event as submitted
+  // ENHANCED: Mark event as submitted
   const markEventAsSubmitted = async (): Promise<void> => {
     const session = await validateUserSession();
     if (!session) return;
@@ -595,7 +803,7 @@ const loadEventData = async (): Promise<void> => {
     return flag === 'true';
   };
 
-  // 🚀 ENHANCED: Reset event submission with complete cleanup
+  // ENHANCED: Reset event submission with complete cleanup
   const resetEventSubmission = async (): Promise<void> => {
     const session = await validateUserSession();
     if (!session) return;
@@ -606,6 +814,7 @@ const loadEventData = async (): Promise<void> => {
     console.log('🔄 Event data reset for user:', userId);
   };
 
+  // REFRESH EVENT STATUS
   const refreshEventStatus = async (): Promise<void> => {
     const session = await validateUserSession();
     if (!session) return;
@@ -641,7 +850,7 @@ const loadEventData = async (): Promise<void> => {
     }
   };
 
-  // 🚀 ENHANCED: Guest management with async and locking
+  // ENHANCED: Guest management with async and locking
   const addGuest = async (guest: Omit<Guest, "id">): Promise<void> => {
     console.log('👥 ADD GUEST - Before:', eventData.guests?.length || 0);
     
@@ -666,6 +875,7 @@ const loadEventData = async (): Promise<void> => {
     });
   };
 
+  // ENHANCED: Guest management with async and locking
   const updateGuest = async (id: string, updates: Partial<Guest>): Promise<void> => {
     console.log('👥 UPDATE GUEST - ID:', id, 'Updates:', updates);
 
@@ -734,9 +944,9 @@ const loadEventData = async (): Promise<void> => {
 
   // Get event summary (unchanged)
   const getEventSummary = (): Record<string, any> => {
-    const guests = eventData.guests || [];
+    const guests: Guest[] = eventData.guests || [];
     const guestStats = getGuestStats();
-    const budgetArray = eventData.budget || [];
+    const budgetArray: Expense[] = eventData.budget || [];
 
     const totalBudget = budgetArray.reduce(
       (sum: number, expense: Expense) => sum + (expense.amount || 0),
@@ -763,7 +973,8 @@ const loadEventData = async (): Promise<void> => {
       submissionDate: new Date().toISOString(),
       mobile_app_id: generateMobileAppId(),
       submitted_from: "OBH-APP",
-      venue: eventData.venue || '', 
+      venue: eventData.venue || '',
+      selected_package: eventData.selected_package || { name: '', pax: 0, price: 0 }
     };
   };
 
@@ -784,26 +995,27 @@ const loadEventData = async (): Promise<void> => {
 
       console.log('🌐 Saving to Supabase...');
       
-      // Insert event plan
+      // Insert event plan with ALL fields
       const { data, error } = await supabase
         .from('event_plans')
         .insert([
           {
-            user_uuid: user.id, // ✅ Use the new UUID column
+            user_uuid: user.id,
             event_type: eventSummary.event_type,
-            package: eventSummary.selected_package?.pax,
-            client_name: eventSummary.client_name,
+            package: eventSummary.selected_package?.name || eventSummary.guest_range || null,
+            client_name: eventSummary.client_name || eventSummary.full_client_name,
             partner_name: eventSummary.partner_name,
             event_date: eventSummary.event_date,
-            guest_count: eventSummary.totalGuests,
+            guest_count: eventSummary.totalGuests || eventSummary.guest_range,
             budget: eventSummary.totalBudget,
             status: 'Pending',
             expenses: eventSummary.budget,
             category: eventSummary.event_type,
             client_email: eventSummary.client_email,
             client_phone: eventSummary.client_phone,
-            venue: eventSummary.venue,
+            venue: eventSummary.venue?.name || eventSummary.venue,
             event_segments: JSON.stringify(eventSummary.schedule),
+            eSignature: eventSummary.eSignature,
           }
         ])
         .select()
@@ -814,22 +1026,31 @@ const loadEventData = async (): Promise<void> => {
         throw new Error(`Failed to save event: ${error.message}`);
       }
 
-      // Insert guests if any
+      // FIX: Insert guests with proper typing
       if (eventSummary.guests && eventSummary.guests.length > 0) {
-        const guestInserts = eventSummary.guests.map((guest: any) => ({
+        console.log('👥 Saving guests:', eventSummary.guests);
+        
+        const guestInserts: any[] = eventSummary.guests.map((guest: Guest) => ({
           event_plan_id: data.id,
-          guest_name: guest.name,
-          status: guest.status,
-          invite_link: guest.inviteLink,
+          guest_name: guest.name || guest.guest_name || '',
+          status: guest.status || 'Pending',
+          invite_link: guest.inviteLink || guest.invite_link || null,
         }));
+
+        console.log('👥 Guest inserts:', guestInserts);
 
         const { error: guestsError } = await supabase
           .from('event_guests')
           .insert(guestInserts);
 
         if (guestsError) {
-          console.warn('⚠️ Could not save guests:', guestsError);
+          console.error('❌ Could not save guests:', guestsError);
+          throw new Error(`Failed to save guests: ${guestsError.message}`);
+        } else {
+          console.log('✅ Guests saved successfully');
         }
+      } else {
+        console.log('⚠️ No guests to save');
       }
 
       console.log('✅ Event saved successfully with ID:', data.id);
@@ -838,7 +1059,7 @@ const loadEventData = async (): Promise<void> => {
 
       return data;
     } catch (err) {
-      console.error('❌ Submission error:', err);
+      console.error('Submission error:', err);
       throw err;
     }
   };
@@ -949,3 +1170,7 @@ export const useEvent = (): EventContextType => {
   }
   return context;
 };
+
+function generateSimpleToken() {
+  throw new Error("Function not implemented.");
+}

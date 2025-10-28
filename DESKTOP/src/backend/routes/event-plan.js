@@ -886,7 +886,7 @@ router.post('/:eventId/guests/:guestId/generate-invite', authenticateToken, asyn
         console.log('🔍 Checking event exists...');
         const eventCheck = await pool.query(
             'SELECT id, client_name FROM event_plans WHERE id = $1',
-            [eventId] // Use eventId directly, let PostgreSQL handle the conversion
+            [eventId]
         );
 
         if (eventCheck.rows.length === 0) {
@@ -932,9 +932,11 @@ router.post('/:eventId/guests/:guestId/generate-invite', authenticateToken, asyn
             });
         }
 
-        // 3. Generate unique token and link
+        // 3. Generate unique token and link - FIX THIS LINE
         const inviteToken = require('crypto').randomBytes(32).toString('hex');
-        const inviteLink = `https://wedding-invites-six.vercel.app/api/event-plans/invitation-page/${numericEventId}/${dbGuestId}/${inviteToken}`;
+        
+        // FIX: Use the FRONTEND URL, not the backend API URL
+        const inviteLink = `https://wedding-invites-six.vercel.app/invite/${numericEventId}/${dbGuestId}/${inviteToken}`;
         
         console.log('🔗 Generated invitation link:', inviteLink);
 
@@ -961,7 +963,6 @@ router.post('/:eventId/guests/:guestId/generate-invite', authenticateToken, asyn
         console.error("❌ Generate invite error:", err);
         console.error("❌ Error details:", err.message);
         
-        // More specific error handling
         if (err.message.includes('invalid input syntax for type integer')) {
             return res.status(400).json({ 
                 error: "Invalid event ID format. Please check the event ID." 
@@ -971,7 +972,6 @@ router.post('/:eventId/guests/:guestId/generate-invite', authenticateToken, asyn
         res.status(500).json({ error: "Failed to generate invitation link: " + err.message });
     }
 });
-
 // ================ //
 // REDIRECT EMBEDDED LINKS
 // ================ //

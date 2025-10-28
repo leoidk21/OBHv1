@@ -1,6 +1,3 @@
-// At the TOP of LandingPage.js - REPLACE the existing API_BASE
-
-// LANDING PAGE CONTROLLER
 if (window.__LandingPageModuleInstance) {
     console.log("LandingPageModule already loaded – reusing existing instance");
     window.LandingPageModule = window.__LandingPageModuleInstance;
@@ -167,82 +164,102 @@ if (window.__LandingPageModuleInstance) {
         }
 
         // ============================================
-        // IMPROVED FETCH ALL EVENTS
+        // IMPROVED ERROR HANDLING FOR ALL FETCH CALLS
         // ============================================
-        // ============================================
-// IMPROVED FETCH ALL EVENTS - SUPABASE VERSION
-// ============================================
-async function loadEvents(forceRefresh = false) {
-    // Don't refetch if we already have events and not forcing refresh
-    if (allEvents.length > 0 && !forceRefresh) {
-        console.log("Using cached events, skipping API call");
-        showContent();
-        return;
-    }
-
-    try {
-        console.log("📡 Fetching events from Supabase...");
-        const response = await fetch(`${API_BASE}/event_plans?select=*`, {
-            method: "GET",
-            headers: {
+        async function supabaseFetch(url, options = {}) {
+            const defaultHeaders = {
                 'apikey': SUPABASE_ANON_KEY,
                 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
                 "Content-Type": "application/json",
-            },
-        });
+            };
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const config = {
+                ...options,
+                headers: {
+                    ...defaultHeaders,
+                    ...options.headers,
+                },
+            };
+
+            try {
+                const response = await fetch(url, config);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error(`Fetch error for ${url}:`, error);
+                throw error;
+            }
         }
 
-        // Supabase returns the data directly (array of events)
-        allEvents = await response.json();
+        // ============================================
+        // IMPROVED FETCH ALL EVENTS
+        // ============================================
+        async function loadEvents(forceRefresh = false) {
+            // Don't refetch if we already have events and not forcing refresh
+            if (allEvents.length > 0 && !forceRefresh) {
+                console.log("Using cached events, skipping API call");
+                showContent();
+                return;
+            }
 
-        // Save to localStorage for persistence
-        localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+            try {
+                console.log("📡 Fetching events from Supabase...");
+                
+                const data = await supabaseFetch(`${API_BASE}/event_plans?select=*&order=event_date.desc`);
+                
+                if (Array.isArray(data)) {
+                    allEvents = data;
 
-        // Save to Electron memory store
-        if (window.store) {
-            window.store.set("events", allEvents);
+                    // Save to localStorage for persistence
+                    localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+
+                    // Save to Electron memory store
+                    if (window.store) {
+                        window.store.set("events", allEvents);
+                    }
+
+                    // Update UI
+                    refreshUI();
+                    await loadDashboardStats();
+
+                    showContent();
+
+                    console.log(`✅ Loaded ${allEvents.length} events from Supabase`);
+                } else {
+                    throw new Error("Invalid data format received from server");
+                }
+            } catch (error) {
+                console.error("Error loading events:", error);
+                showNotification("Failed to load events: " + error.message, "error");
+                showContent();
+            }
         }
-
-        // Update UI
-        refreshUI();
-        await loadDashboardStats();
-
-        showContent();
-
-        console.log(`✅ Loaded ${allEvents.length} events from Supabase`);
-    } catch (error) {
-        console.error("Error loading events:", error);
-        showNotification("Failed to load events: " + error.message, "error");
-        showContent();
-    }
-}
 
         // ============================================
         // LOAD DASHBOARD STATS
         // ============================================
-        // ============================================
-// LOAD DASHBOARD STATS - SUPABASE VERSION
-// ============================================
-async function loadDashboardStats(forceRefresh = false) {
-    if (dashboardStats && !forceRefresh) {
-        updateDashboardCards(dashboardStats);
-        return;
-    }
+        async function loadDashboardStats(forceRefresh = false) {
+            if (dashboardStats && !forceRefresh) {
+                updateDashboardCards(dashboardStats);
+                return;
+            }
 
-    try {
-        // Since we don't have a stats endpoint, compute locally
-        dashboardStats = computeDashboardStatsLocally();
-    } catch (error) {
-        console.error("Error loading stats:", error);
-        dashboardStats = computeDashboardStatsLocally(); // fallback
-    }
+            try {
+                // Since we don't have a stats endpoint, compute locally
+                dashboardStats = computeDashboardStatsLocally();
+            } catch (error) {
+                console.error("Error loading stats:", error);
+                dashboardStats = computeDashboardStatsLocally(); // fallback
+            }
 
-    localStorage.setItem("cachedDashboardStats", JSON.stringify(dashboardStats));
-    updateDashboardCards(dashboardStats);
-}
+            localStorage.setItem("cachedDashboardStats", JSON.stringify(dashboardStats));
+            updateDashboardCards(dashboardStats);
+        }
 
         // ============================================
         // UPDATE DASHBOARD CARDS - FIXED
@@ -382,82 +399,75 @@ async function loadDashboardStats(forceRefresh = false) {
         // ============================================
         // MARK EVENT AS COMPLETED (PUT request)
         // ============================================
-        // ============================================
-// MARK EVENT AS COMPLETED - SUPABASE VERSION
-// ============================================
-async function markEventAsCompleted(eventId) {
-    try {
-        const response = await fetch(`${API_BASE}/event_plans?id=eq.${eventId}`, {
-            method: "PATCH",
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation"
-            },
-            body: JSON.stringify({
-                status: "Completed",
-                remarks: "Automatically marked as completed after event date",
-                updated_at: new Date().toISOString()
-            }),
-        });
+        async function markEventAsCompleted(eventId) {
+            try {
+                const response = await fetch(`${API_BASE}/event_plans?id=eq.${eventId}`, {
+                    method: "PATCH",
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=representation"
+                    },
+                    body: JSON.stringify({
+                        status: "Completed",
+                        remarks: "Automatically marked as completed after event date",
+                    }),
+                });
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
 
-        const data = await response.json();
-        if (data && data.length > 0) {
-            console.log(`Event ${eventId} marked as Completed (server)`);
-            return true;
-        } else {
-            console.warn(`Server rejected completing event ${eventId}`);
-            return false;
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    console.log(`Event ${eventId} marked as Completed (server)`);
+                    return true;
+                } else {
+                    console.warn(`Server rejected completing event ${eventId}`);
+                    return false;
+                }
+            } catch (err) {
+                console.error("Error marking event completed:", err);
+                return false;
+            }
         }
-    } catch (err) {
-        console.error("Error marking event completed:", err);
-        return false;
-    }
-}
 
         // ============================================
         // VIEW EVENT DETAILS
         // ============================================
-        // ============================================
-// VIEW EVENT DETAILS - SUPABASE VERSION
-// ============================================
-async function viewEvent(eventId) {
-    try {
-        console.log("Viewing event:", eventId);
-        currentEventId = eventId;
+        async function viewEvent(eventId) {
+            try {
+                console.log("Viewing event:", eventId);
+                currentEventId = eventId;
 
-        const response = await fetch(
-            `${API_BASE}/event_plans?id=eq.${eventId}&select=*`,
-            {
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    "Content-Type": "application/json",
-                },
-            },
-        );
+                const response = await fetch(
+                    `${API_BASE}/event_plans?id=eq.${eventId}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
 
-        if (!response.ok) {
-            throw new Error("Failed to fetch event details");
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch event details: HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data && data.length > 0) {
+                    displayEventModal(data[0]);
+                } else {
+                    throw new Error("Event not found in database");
+                }
+            } catch (error) {
+                console.error("Error viewing event:", error);
+                showNotification("Failed to load event details: " + error.message, "error");
+            }
         }
-
-        const data = await response.json();
-
-        if (data && data.length > 0) {
-            displayEventModal(data[0]);
-        } else {
-            throw new Error("Event not found");
-        }
-    } catch (error) {
-        console.error("Error viewing event:", error);
-        showNotification("Failed to load event details", "error");
-    }
-}
 
         // ============================================
         // DISPLAY EVENT IN MODAL
@@ -481,59 +491,65 @@ async function viewEvent(eventId) {
             }
 
             modalBody.innerHTML = `
-        <div class="event-details">
-            <div class="detail-row">
-                <strong>Client Name:</strong>
-                <span>${escapeHtml(event.client_name)}</span>
-            </div>
-            <div class="detail-row">
-                <strong>Partner Name:</strong>
-                <span>${escapeHtml(event.partner_name || "N/A")}</span>
-            </div>
-            <div class="detail-row">
-                <strong>Event Type:</strong>
-                <span>${escapeHtml(event.event_type)}</span>
-            </div>
-            <div class="detail-row">
-                <strong>Package:</strong>
-                <span>${escapeHtml(event.package || "N/A")}</span>
-            </div>
-            <div class="detail-row">
-                <strong>Event Date:</strong>
-                <span>${formatDate(event.event_date)}</span>
-            </div>
-            <div class="detail-row">
-                <strong>Guest Range:</strong>
-                <span>${event.guest_count || 0} Pax</span>
-            </div>
-            
-            <div class="detail-row">
-                <strong>Submitted By:</strong>
-                <span>${escapeHtml(event.user_name || "Unknown")} (${escapeHtml(event.user_email || "")})</span>
-            </div>
-            ${
-                event.remarks
-                    ? `
-
-                <div class="detail-row last-row">
-                    <strong>Remarks:</strong>
-                    <span>${escapeHtml(event.remarks)}</span>
-                    <span class="status status-${event.status.completed ? "completed" : event.status.toLowerCase()}">${event.status}</span>
+                <div class="event-details">
+                    <div class="detail-row">
+                        <strong>Client Name:</strong>
+                        <span>${escapeHtml(event.client_name)}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Partner Name:</strong>
+                        <span>${escapeHtml(event.partner_name || "N/A")}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Event Type:</strong>
+                        <span>${escapeHtml(event.event_type)}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Package:</strong>
+                        <!-- FIX: Use guest_range instead of package since package is null -->
+                        <span>${escapeHtml(event.event_package || "Not specified")}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Event Date:</strong>
+                        <span>${formatDate(event.event_date)}</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Guest Count:</strong>
+                        <span>${event.guest_count || 0} Pax</span>
+                    </div>
+                    <div class="detail-row">
+                        <strong>Budget:</strong>
+                        <span>₱${formatNumber(event.budget || 0)}</span>
+                    </div>
+                    <!-- Show event segments if available -->
+                    ${segments.length > 0 ? `
+                        <div class="detail-row">
+                            <strong>Event Segments:</strong>
+                            <div class="segments-list">
+                                ${segments.map(segment => `
+                                    <div class="segment-item">
+                                        <strong>${escapeHtml(segment.name || 'Segment')}:</strong> 
+                                        ${escapeHtml(segment.venue || '')} 
+                                        (${segment.startTime || ''} - ${segment.endTime || ''})
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="detail-row">
+                        <strong>Status:</strong>
+                        <span class="status status-${event.status.toLowerCase()}">${event.status}</span>
+                    </div>
+                    
+                    ${event.remarks ? `
+                        <div class="detail-row last-row">
+                            <strong>Remarks:</strong>
+                            <span>${escapeHtml(event.remarks)}</span>
+                        </div>
+                    ` : ''}
                 </div>
-            `
-                    : ""
-            }
-            
-        </div>
-    `;
-            // <div class="detail-row status-row">
-            //     <strong>Status:</strong>
-            //     <span class="status status-${event.status.completed ? "completed" : event.status.toLowerCase()}">${event.status}</span>
-            // </div>
-            // <div class="detail-row">
-            //     <strong>Budget:</strong>
-            //     <span>₱${formatNumber(event.budget || 0)}</span>
-            // </div>
+            `;
 
             // Show/hide approve/reject buttons based on status
             const approveBtn = modal.querySelector(".approve");
@@ -552,148 +568,148 @@ async function viewEvent(eventId) {
         }
 
         // ============================================                     
-        // APPROVE EVENT
+        // APPROVE EVENT - SUPABASE VERSION
         // ============================================
-// ============================================                     
-// APPROVE EVENT - SUPABASE VERSION
-// ============================================
-async function approveEvent() {
-    if (!currentEventId) return;
-
-    try {
-        const response = await fetch(
-            `${API_BASE}/event_plans?id=eq.${currentEventId}`,
-            {
-                method: "PATCH",
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=representation"
-                },
-                body: JSON.stringify({
-                    status: "Approved",
-                    remarks: "Approved by admin",
-                    updated_at: new Date().toISOString()
-                }),
-            },
-        );
-
-        if (!response.ok) {
-            throw new Error("Failed to approve event");
+        async function approveEvent() {
+        if (!currentEventId) {
+            showNotification("No event selected", "error");
+            return;
         }
 
-        const data = await response.json();
+        try {
+                const response = await fetch(
+                    `${API_BASE}/event_plans?id=eq.${currentEventId}`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            "Content-Type": "application/json",
+                            "Prefer": "return=representation"
+                        },
+                        body: JSON.stringify({
+                            status: "Approved",
+                            remarks: "Approved by admin",
+                        }),
+                    }
+                );
 
-        if (data && data.length > 0) {
-            showNotification("Event approved successfully", "success");
-            
-            // Update local cache
-            const updatedEvent = data[0];
-            const index = allEvents.findIndex(e => e.id === currentEventId);
-            if (index !== -1) {
-                allEvents[index] = updatedEvent;
-                localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+
+                if (data && data.length > 0) {
+                    showNotification("Event approved successfully", "success");
+                    
+                    // Update local cache
+                    const updatedEvent = data[0];
+                    const index = allEvents.findIndex(e => e.id === currentEventId);
+                    if (index !== -1) {
+                        allEvents[index] = updatedEvent;
+                        // Update both storage methods
+                        localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+                        if (window.store) {
+                            window.store.set("events", allEvents);
+                        }
+                    }
+                    
+                    closeModal();
+                    await loadEvents(true);
+                    await loadDashboardStats(true);
+                } else {
+                    throw new Error("No data returned from server");
+                }
+            } catch (error) {
+                console.error("Error approving event:", error);
+                showNotification("Failed to approve event: " + error.message, "error");
             }
-            
-            closeModal();
-            await loadEvents(true);
-            await loadDashboardStats(true);
         }
-    } catch (error) {
-        console.error("Error approving event:", error);
-        showNotification("Failed to approve event", "error");
-    }
-}
 
         // ============================================
         // REJECT EVENT
         // ============================================
-// ============================================
-// REJECT EVENT - SUPABASE VERSION
-// ============================================
-async function rejectEvent() {
-    if (!currentEventId) return;
+        async function rejectEvent() {
+            if (!currentEventId) return;
 
-    try {
-        const response = await fetch(
-            `${API_BASE}/event_plans?id=eq.${currentEventId}`,
-            {
-                method: "PATCH",
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=representation"
-                },
-                body: JSON.stringify({
-                    status: "Rejected",
-                    remarks: "Rejected by admin",
-                    updated_at: new Date().toISOString()
-                }),
-            },
-        );
+            try {
+                const response = await fetch(
+                    `${API_BASE}/event_plans?id=eq.${currentEventId}`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            "Content-Type": "application/json",
+                            "Prefer": "return=representation"
+                        },
+                        body: JSON.stringify({
+                            status: "Rejected",
+                            remarks: "Rejected by admin",
+                        }),
+                    },
+                );
 
-        if (!response.ok) {
-            throw new Error("Failed to reject event");
-        }
+                if (!response.ok) {
+                    throw new Error("Failed to reject event");
+                }
 
-        const data = await response.json();
+                const data = await response.json();
 
-        if (data && data.length > 0) {
-            showNotification("Event rejected", "success");
-            
-            // Update local cache
-            const updatedEvent = data[0];
-            const index = allEvents.findIndex(e => e.id === currentEventId);
-            if (index !== -1) {
-                allEvents[index] = updatedEvent;
-                localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+                if (data && data.length > 0) {
+                    showNotification("Event rejected", "success");
+                    
+                    // Update local cache
+                    const updatedEvent = data[0];
+                    const index = allEvents.findIndex(e => e.id === currentEventId);
+                    if (index !== -1) {
+                        allEvents[index] = updatedEvent;
+                        localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
+                    }
+                    
+                    closeModal();
+                    loadEvents(true);
+                    loadDashboardStats(true);
+                }
+            } catch (error) {
+                console.error("Error rejecting event:", error);
+                showNotification("Failed to reject event", "error");
             }
-            
-            closeModal();
-            loadEvents(true);
-            loadDashboardStats(true);
         }
-    } catch (error) {
-        console.error("Error rejecting event:", error);
-        showNotification("Failed to reject event", "error");
-    }
-}
+
         // ============================================
         // DELETE EVENT
         // ============================================
-        // ============================================
-// DELETE EVENT - SUPABASE VERSION
-// ============================================
-async function deleteEvent(eventId) {
-    try {
-        const confirmDelete = confirm("Are you sure you want to delete this event?");
-        if (!confirmDelete) return;
+        async function deleteEvent(eventId) {
+            try {
+                const confirmDelete = confirm("Are you sure you want to delete this event?");
+                if (!confirmDelete) return;
 
-        const response = await fetch(`${API_BASE}/event_plans?id=eq.${eventId}`, {
-            method: "DELETE",
-            headers: { 
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                "Content-Type": "application/json"
-            },
-        });
+                const response = await fetch(`${API_BASE}/event_plans?id=eq.${eventId}`, {
+                    method: "DELETE",
+                    headers: { 
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                });
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                showNotification("Event deleted successfully", "success");
+
+                // Force-refresh dashboard & events
+                await loadEvents(true);
+                await loadDashboardStats(true);
+            } catch (error) {
+                console.error("Error deleting event:", error);
+                showNotification("Error deleting event", "error");
+            }
         }
-
-        showNotification("Event deleted successfully", "success");
-
-        // Force-refresh dashboard & events
-        await loadEvents(true);
-        await loadDashboardStats(true);
-    } catch (error) {
-        console.error("Error deleting event:", error);
-        showNotification("Error deleting event", "error");
-    }
-}
 
         // ============================================
         // REFRESH DATA
@@ -802,7 +818,6 @@ async function deleteEvent(eventId) {
 
     window.__LandingPageModuleInstance = window.LandingPageModule;
 }
-
 
 // ============================================
 // AUTO-INITIALIZATION
