@@ -12,18 +12,19 @@ import MenuBar from "./ReusableComponents/MenuBar";
 
 import * as SecureStore from 'expo-secure-store';
 import { useEvent } from '../../context/EventContext';
+import { supabase } from '../../lib/supabase';
 
-const API_BASE = "https://ela-untraceable-foresakenly.ngrok-free.dev/api";
-
-interface PaymentReminder {
-  id: string;
-  gcash_name: string;
-  gcash_number: string;
-  due_date: string;
-  notes: string;
-  client_name: string;
-  event_type: string;
-  sent_at: string;
+  interface PaymentReminder {
+    id: string;
+    gcash_name: string;
+    gcash_number: string;
+    due_date: string;
+    notes: string;
+    client_name: string;
+    event_type: string;
+    sent_at: string;
+    status: string;
+    event_id?: number;
 }
 
 const Payment = () => {
@@ -38,19 +39,62 @@ const Payment = () => {
   // Fetch payment reminders
   const fetchReminders = async () => {
     try {
-      const token = await SecureStore.getItemAsync("userToken");
-      const response = await fetch(`${API_BASE}/event-plans/payment-reminders`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      console.log("🔄 Fetching reminders from Supabase...");
+      
+      // Remove !inner to make the event relation optional
+      const { data, error } = await supabase
+        .from('payment_reminders')
+        .select(`
+          *,
+          event_plans (
+            event_type,
+            package,
+            event_date
+          )
+        `)
+        .eq('status', 'pending')
+        .order('sent_at', { ascending: false })
+        .limit(1);
+
+      console.log("📊 Fetch result:", {
+        hasData: !!data,
+        dataLength: data?.length,
+        data: data,
+        error: error
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.reminders && result.reminders.length > 0) {
-          setReminder(result.reminders[0]); // Show most recent reminder
-        }
+      if (error) {
+        console.error('❌ Supabase fetch error:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const reminderData = data[0];
+        console.log("📝 Raw reminder data:", reminderData);
+        
+        // Handle case where event_plans might be null or empty array
+        const eventData = Array.isArray(reminderData.event_plans) 
+          ? reminderData.event_plans[0] 
+          : reminderData.event_plans;
+        
+        const combinedReminder: PaymentReminder = {
+          id: reminderData.id.toString(),
+          gcash_name: reminderData.gcash_name || 'Not specified',
+          gcash_number: reminderData.gcash_number || 'Not specified',
+          due_date: reminderData.due_date || new Date().toISOString(),
+          notes: reminderData.notes,
+          client_name: reminderData.client_name,
+          event_type: eventData?.event_type || 'Event', // Fallback if no event data
+          sent_at: reminderData.sent_at,
+          status: reminderData.status,
+          event_id: reminderData.event_id
+        };
+        
+        console.log("✅ Processed reminder:", combinedReminder);
+        setReminder(combinedReminder);
+      } else {
+        console.log("ℹ️ No reminders found in database");
+        setReminder(null);
       }
     } catch (error) {
       console.error('❌ Fetch reminders error:', error);

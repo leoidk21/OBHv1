@@ -1,7 +1,13 @@
-console.log("BudgetPage.js is loaded!");
+console.log("BudgetController initialized!");
 
 class BudgetController {
     constructor() {
+        console.log("BudgetController initialized!");
+        
+        // Use the same constants as your GuestController
+        this.API_BASE = "https://vxukqznjkdtuytnkhldu.supabase.co/rest/v1";
+        this.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA";
+        
         this.events = [];
         this.currentClientFilter = 'all';
         this.currentReminderEvent = null;
@@ -17,8 +23,21 @@ class BudgetController {
 
     async loadExpensesData() {
         try {
-            const data = await fetchApprovedEvents('budget');
-            this.events = data.events;
+            // Use direct Supabase call
+            const response = await fetch(`${this.API_BASE}/event_plans?status=eq.Approved&select=*`, {
+                headers: {
+                    'apikey': this.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            }
+
+            const data = await response.json();
+            this.events = data || [];
             console.log("Loaded events with expenses:", this.events);
             
             this.populateClientFilter();
@@ -26,24 +45,45 @@ class BudgetController {
             this.displayEventsWithExpenses();
             this.displayCoordinatorsFee();
             
-            this.showContent(); // Call this AFTER everything is rendered
+            this.showContent();
         } catch (error) {
             console.error("Failed to load expenses data:", error);
             showNotification("Failed to load expenses information", "error");
-            this.showContent(); // Still show content even on error
+            this.showContent();
         }
     }
 
-    showContent() {
-        const budgetContent = document.querySelector('.budget-content');
-        if (budgetContent) {
-            // Small delay to ensure DOM is fully updated
-            setTimeout(() => {
-                budgetContent.classList.add('ready');
-            }, 50);
+    // Use the same supabaseFetch method from your original code
+    async supabaseFetch(url, options = {}) {
+        const defaultHeaders = {
+            'apikey': this.SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+        };
+
+        const config = {
+            ...options,
+            headers: {
+                ...defaultHeaders,
+                ...options.headers,
+            },
+        };
+
+        try {
+            const response = await fetch(url, config);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error(`Fetch error for ${url}:`, error);
+            throw error;
         }
     }
-
+    
     populateClientFilter() {
         const clientDropdown = document.querySelector('.client-dropdown');
         if (!clientDropdown) return;
@@ -167,50 +207,51 @@ class BudgetController {
         return event.expenses.reduce((total, expense) => {
             return total + (parseFloat(expense.amount) || 0);
         }, 0);
-    }
+    }   
 
-sendReminder(eventId, clientName) {
-    try {
-        console.log("📧 Sending reminder for:", clientName);
+    async sendReminder(eventId, clientName) {
+        let submitBtn;
+        let originalText;
+        let form;
+        let successMsg;
+        let notes;
         
-        const form = document.getElementById("sendReminderForm");
-        const successMsg = document.getElementById("sendReminderSuccess");
-        
-        if (!form || !successMsg) return;
-
-        const notes = form.querySelector('.reminder-notes').value;
-
-        // Show loading state
-        const submitBtn = document.getElementById("submitReminderBtn");
-        const originalText = submitBtn.textContent;
-        submitBtn.textContent = "Sending...";
-        submitBtn.disabled = true;
-
-        // Call the function WITHOUT authentication (JWT is disabled)
-        fetch('https://vxukqznjkdtuytnkhldu.supabase.co/functions/v1/hyper-worker', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-                // No Authorization header needed anymore
-            },
-            body: JSON.stringify({
-                eventId: eventId,
-                clientName: clientName,
-                notes: notes
-            })
-        })
-        .then(response => {
-            console.log("📡 Response status:", response.status);
+        try {
+            console.log("📧 Sending reminder for:", clientName);
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
+            form = document.getElementById("sendReminderForm");
+            successMsg = document.getElementById("sendReminderSuccess");
             
-            return response.json();
-        })
-        .then(result => {
-            console.log("✅ Reminder sent successfully:", result);
+            if (!form || !successMsg) return;
+
+            notes = form.querySelector('.reminder-notes').value;
+
+            // Show loading state
+            submitBtn = document.getElementById("submitReminderBtn");
+            originalText = submitBtn.textContent;
+            submitBtn.textContent = "Sending...";
+            submitBtn.disabled = true;
+
+            // Use the SAME pattern as your Landing Page approveEvent/rejectEvent
+            console.log("🔄 Inserting directly into payment_reminders via REST API...");
             
+            const data = await this.supabaseFetch(`${this.API_BASE}/payment_reminders`, {
+                method: "POST",
+                headers: {
+                    "Prefer": "return=representation"
+                },
+                body: JSON.stringify([
+                    {
+                        event_id: parseInt(eventId),
+                        client_name: clientName,
+                        notes: notes,
+                        status: 'pending'
+                    }
+                ])
+            });
+
+            console.log("✅ Reminder stored in payment_reminders:", data);
+
             // Show success message
             form.style.display = "none";
             successMsg.style.display = "block";
@@ -228,111 +269,180 @@ sendReminder(eventId, clientName) {
             }, 3000);
             
             this.showSuccess("Reminder sent successfully!");
-        })
-        .catch(error => {
+            
+        } catch (error) {
             console.error("❌ Error sending reminder:", error);
             
             // Fallback: Store locally and show success
             this.storeReminderLocally(eventId, clientName, notes);
             
-            form.style.display = "none";
-            successMsg.style.display = "block";
+            if (form && successMsg) {
+                form.style.display = "none";
+                successMsg.style.display = "block";
+                
+                setTimeout(() => {
+                    const modal = document.getElementById("send-reminder-modal");
+                    if (modal) modal.style.display = "none";
+                    form.style.display = "block";
+                    successMsg.style.display = "none";
+                    form.querySelector('.reminder-notes').value = '';
+                }, 3000);
+            }
             
-            setTimeout(() => {
-                const modal = document.getElementById("send-reminder-modal");
-                if (modal) modal.style.display = "none";
-                form.style.display = "block";
-                successMsg.style.display = "none";
-                form.querySelector('.reminder-notes').value = '';
-            }, 3000);
+            this.showSuccess("Reminder stored locally! Will sync when available.");
+            
+        } finally {
+            // Reset button state only if submitBtn exists
+            if (submitBtn) {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+    }
+
+    fallbackSendReminder(eventId, clientName, notes, submitBtn, originalText) {
+        const form = document.getElementById("sendReminderForm");
+        const successMsg = document.getElementById("sendReminderSuccess");
+        
+        // Call the original hyper-worker function without database
+        fetch('https://vxukqznjkdtuytnkhldu.supabase.co/functions/v1/hyper-worker', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                eventId: eventId,
+                clientName: clientName,
+                notes: notes
+            })
+        })
+        .then(response => {
+            console.log("📡 Response status:", response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            return response.json();
+        })
+        .then(result => {
+            console.log("✅ Reminder sent via fallback:", result);
+            
+            // Store locally as backup
+            this.storeReminderLocally(eventId, clientName, notes);
+            
+            // Show success message
+            if (form && successMsg) {
+                form.style.display = "none";
+                successMsg.style.display = "block";
+                
+                setTimeout(() => {
+                    const modal = document.getElementById("send-reminder-modal");
+                    if (modal) modal.style.display = "none";
+                    form.style.display = "block";
+                    successMsg.style.display = "none";
+                    form.querySelector('.reminder-notes').value = '';
+                }, 3000);
+            }
+            
+            this.showSuccess("Reminder sent successfully!");
+        })
+        .catch(error => {
+            console.error("❌ Fallback also failed:", error);
+            
+            // Store locally as last resort
+            this.storeReminderLocally(eventId, clientName, notes);
+            
+            if (form && successMsg) {
+                form.style.display = "none";
+                successMsg.style.display = "block";
+                
+                setTimeout(() => {
+                    const modal = document.getElementById("send-reminder-modal");
+                    if (modal) modal.style.display = "none";
+                    form.style.display = "block";
+                    successMsg.style.display = "none";
+                    form.querySelector('.reminder-notes').value = '';
+                }, 3000);
+            }
             
             this.showSuccess("Reminder queued for sending!");
-        })
-        .finally(() => {
-            // Reset button state
-            submitBtn.textContent = originalText;
-            submitBtn.disabled = false;
         });
-
-    } catch (error) {
-        console.error("❌ sendReminder function error:", error);
-        this.showError("Error sending reminder");
     }
-}
 
-// Add this method to store reminders locally
-storeReminderLocally(eventId, clientName, notes) {
-    try {
-        const reminder = {
-            eventId,
-            clientName,
-            notes,
-            sentAt: new Date().toISOString(),
-            id: Date.now().toString()
-        };
-        
-        // Get existing reminders from localStorage
-        const existingReminders = JSON.parse(localStorage.getItem('payment_reminders') || '[]');
-        existingReminders.push(reminder);
-        
-        // Save back to localStorage
-        localStorage.setItem('payment_reminders', JSON.stringify(existingReminders));
-        
-        console.log("💾 Reminder stored locally:", reminder);
-    } catch (error) {
-        console.error("❌ Error storing reminder locally:", error);
-    }
-}
-
-// Add these helper methods to your BudgetController class
-showSuccess(message) {
-    // Try to use existing notification system
-    if (typeof showNotification === 'function') {
-        showNotification(message, "success");
-    } else {
-        // Fallback notification
-        console.log("✅ " + message);
-        // You can also show a temporary message on the page
-        this.showTempMessage(message, 'success');
-    }
-}
-
-showError(message) {
-    // Try to use existing notification system
-    if (typeof showNotification === 'function') {
-        showNotification(message, "error");
-    } else {
-        // Fallback notification
-        console.error("❌ " + message);
-        this.showTempMessage(message, 'error');
-    }
-}
-
-showTempMessage(message, type) {
-    // Create a temporary message element
-    const messageEl = document.createElement('div');
-    messageEl.textContent = message;
-    messageEl.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 20px;
-        background: ${type === 'success' ? '#4CAF50' : '#f44336'};
-        color: white;
-        border-radius: 5px;
-        z-index: 10000;
-        font-family: Arial, sans-serif;
-    `;
-    
-    document.body.appendChild(messageEl);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-        if (document.body.contains(messageEl)) {
-            document.body.removeChild(messageEl);
+    // Add this method to store reminders locally
+    storeReminderLocally(eventId, clientName, notes) {
+        try {
+            const reminder = {
+                eventId,
+                clientName,
+                notes,
+                sentAt: new Date().toISOString(),
+                id: Date.now().toString()
+            };
+            
+            // Get existing reminders from localStorage
+            const existingReminders = JSON.parse(localStorage.getItem('payment_reminders') || '[]');
+            existingReminders.push(reminder);
+            
+            // Save back to localStorage
+            localStorage.setItem('payment_reminders', JSON.stringify(existingReminders));
+            
+            console.log("💾 Reminder stored locally:", reminder);
+        } catch (error) {
+            console.error("❌ Error storing reminder locally:", error);
         }
-    }, 3000);
-}
+    }
+
+    // Add these helper methods to your BudgetController class
+    showSuccess(message) {
+        // Try to use existing notification system
+        if (typeof showNotification === 'function') {
+            showNotification(message, "success");
+        } else {
+            // Fallback notification
+            console.log("✅ " + message);
+            // You can also show a temporary message on the page
+            this.showTempMessage(message, 'success');
+        }
+    }
+
+    showError(message) {
+        // Try to use existing notification system
+        if (typeof showNotification === 'function') {
+            showNotification(message, "error");
+        } else {
+            // Fallback notification
+            console.error("❌ " + message);
+            this.showTempMessage(message, 'error');
+        }
+    }
+
+    showTempMessage(message, type) {
+        // Create a temporary message element
+        const messageEl = document.createElement('div');
+        messageEl.textContent = message;
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: ${type === 'success' ? '#4CAF50' : '#f44336'};
+            color: white;
+            border-radius: 5px;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+        `;
+        
+        document.body.appendChild(messageEl);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            if (document.body.contains(messageEl)) {
+                document.body.removeChild(messageEl);
+            }
+        }, 3000);
+    }
 
     displayCoordinatorsFee() {
         const coordinatorsTbody = document.getElementById('coordinators-tbody');

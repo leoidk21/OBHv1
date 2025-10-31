@@ -1,5 +1,5 @@
 const express = require('express');
-const pool = require('../db');
+const supabase = require('../supabase'); // Import Supabase
 const { authenticateToken, requireSuperAdmin } = require('./middleware/super-admin-auth');
 const router = express.Router();
 
@@ -12,89 +12,53 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// GET /api/superadmin/logs - View all admin logs
 router.get('/logs', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 50, admin_id, target_page, action, date_from, date_to } = req.query;
     const offset = (page - 1) * limit;
 
-    // Build dynamic WHERE clause
-    let whereConditions = [];
-    let queryParams = [];
-    let paramCount = 1;
+    let query = supabase
+      .from('admin_logs')
+      .select(`
+        id,
+        admin_id,
+        action,
+        target_page,
+        details,
+        ip_address,
+        timestamp,
+        admins (
+          first_name,
+          last_name,
+          email,
+          role
+        )
+      `, { count: 'exact' });
 
-    if (admin_id) {
-      whereConditions.push(`al.admin_id = $${paramCount}`);
-      queryParams.push(admin_id);
-      paramCount++;
-    }
+    // Apply filters
+    if (admin_id) query = query.eq('admin_id', admin_id);
+    if (target_page) query = query.eq('target_page', target_page);
+    if (action) query = query.ilike('action', `%${action}%`);
+    if (date_from) query = query.gte('timestamp', date_from);
+    if (date_to) query = query.lte('timestamp', date_to);
 
-    if (target_page) {
-      whereConditions.push(`al.target_page = $${paramCount}`);
-      queryParams.push(target_page);
-      paramCount++;
-    }
+    // Apply pagination
+    query = query
+      .order('timestamp', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    if (action) {
-      whereConditions.push(`al.action ILIKE $${paramCount}`);
-      queryParams.push(`%${action}%`);
-      paramCount++;
-    }
+    const { data: logs, error, count } = await query;
 
-    if (date_from) {
-      whereConditions.push(`al.timestamp >= $${paramCount}`);
-      queryParams.push(date_from);
-      paramCount++;
-    }
-
-    if (date_to) {
-      whereConditions.push(`al.timestamp <= $${paramCount}`);
-      queryParams.push(date_to);
-      paramCount++;
-    }
-
-    const whereClause = whereConditions.length > 0 
-      ? 'WHERE ' + whereConditions.join(' AND ') 
-      : '';
-
-    // Get total count
-    const countResult = await pool.query(
-      `SELECT COUNT(*) FROM admin_logs al ${whereClause}`,
-      queryParams
-    );
-    const totalLogs = parseInt(countResult.rows[0].count);
-
-    // Get paginated logs with admin info
-    queryParams.push(limit, offset);
-    const result = await pool.query(
-      `SELECT 
-        al.id,
-        al.admin_id,
-        al.action,
-        al.target_page,
-        al.details,
-        al.ip_address,
-        al.timestamp,
-        a.first_name,
-        a.last_name,
-        a.email,
-        a.role
-       FROM admin_logs al
-       JOIN admins a ON al.admin_id = a.id
-       ${whereClause}
-       ORDER BY al.timestamp DESC
-       LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
-      queryParams
-    );
+    if (error) throw error;
 
     res.json({
       success: true,
-      logs: result.rows,
+      logs: logs || [],
       pagination: {
-        total: totalLogs,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(totalLogs / limit)
+        totalPages: Math.ceil(count / limit)
       }
     });
   } catch (err) {
@@ -170,32 +134,23 @@ router.get('/logs/summary', authenticateToken, requireSuperAdmin, async (req, re
 // GET /api/superadmin/admins - List all admins
 router.get('/admins', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT 
-        id, 
-        first_name, 
-        last_name, 
-        email, 
-        phone, 
-        role, 
-        status,
-        created_at
-       FROM admins
-       WHERE id != $1
-       ORDER BY 
-         CASE WHEN status = 'pending' THEN 1 ELSE 2 END,
-         created_at DESC`,
-      [req.user.id]
-    );
+    const { data, error } = await supabase
+      .from('admins')
+      .select('id, first_name, last_name, email, phone, role, status, created_at')
+      .neq('id', req.user.id)
+      .order('status', { ascending: true })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
 
     console.log("=== DEBUG: Admin Statuses ===");
-    result.rows.forEach(admin => {
+    data.forEach(admin => {
       console.log(`Admin: ${admin.email}, Status: ${admin.status}, Role: ${admin.role}`);
     });
 
     res.json({
       success: true,
-      admins: result.rows
+      admins: data
     });
   } catch (err) {
     console.error("Get admins error:", err.message);
@@ -207,41 +162,29 @@ router.get('/admins', authenticateToken, requireSuperAdmin, async (req, res) => 
 router.put('/admins/:id/approve', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { decision } = req.body; // 'approve' or 'reject'
+    const { decision } = req.body;
     const status = decision === 'approve' ? 'approved' : 'rejected';
 
     console.log(`Approval request: Admin ${id}, Decision: ${decision}, Status: ${status}`);
 
-    const result = await pool.query(
-      `UPDATE admins 
-       SET status = $1, approved_by = $2, approved_at = NOW()
-       WHERE id = $3
-       RETURNING id, first_name, last_name, email, status`,
-      [status, req.user.id, id]
-    );
+    const { data, error } = await supabase
+      .from('admins')
+      .update({
+        status: status,
+        approved_by: req.user.id,
+        approved_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, first_name, last_name, email, status');
 
-    if (result.rows.length === 0) {
+    if (error || !data || data.length === 0) {
       return res.status(404).json({ error: "Admin not found" });
     }
 
-    const admin = result.rows[0];
+    const admin = data[0];
     console.log(`Successfully updated admin ${admin.email} to status: ${admin.status}`);
 
-    // Optional: send notification email (comment out if email not configured)
-    try {
-      if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        await transporter.sendMail({
-          from: `"OBH Admin" <${process.env.EMAIL_USER}>`,
-          to: admin.email,
-          subject: `Your admin account has been ${status}`,
-          html: `<p>Hello ${admin.first_name},<br>Your admin account has been <b>${status}</b> by the Super Admin.</p>`
-        });
-        console.log(`Notification email sent to ${admin.email}`);
-      }
-    } catch (emailError) {
-      console.error("Email sending failed, but admin was updated:", emailError.message);
-      // Don't fail the request if email fails
-    }
+    // Email sending logic here...
 
     res.json({ 
       success: true, 

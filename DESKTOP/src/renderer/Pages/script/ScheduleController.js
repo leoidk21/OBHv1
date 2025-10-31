@@ -24,6 +24,8 @@ if (document.body.dataset.page === 'SchedulePage') {
 
 class ScheduleContainer {
     constructor() {
+        this.API_BASE = "https://vxukqznjkdtuytnkhldu.supabase.co/rest/v1";
+        this.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA";
         this.approvedEvents = [];
         this.currentClientFilter = 'all';
         window.scheduleContainer = this;
@@ -38,49 +40,61 @@ class ScheduleContainer {
         });
     }
 
-     async waitForGlobals() {
+    async waitForGlobals() {
         return new Promise(resolve => {
-        const interval = setInterval(() => {
-            if (typeof checkAuth === "function" && typeof fetchApprovedEvents === "function") {
-            clearInterval(interval);
-            resolve();
-            }
+            const interval = setInterval(() => {
+                if (typeof checkAuth === "function") {
+                    clearInterval(interval);
+                    resolve();
+                }
+            }, 100);
         });
-      });
     }
 
     async init() {
         if (!document.querySelector(".schedule-content")) {
-            setTimeout(() => this.init());
+            setTimeout(() => this.init(), 100);
             return;
         }
 
         if (!checkAuth()) return;
 
         await this.loadSchedule();
-
         this.initializeCalendarWithEvents();
         document.querySelector('.schedule-content').classList.add('ready');
     }
 
-    // LOAD SCHEDULE
+    // LOAD SCHEDULE - Using direct Supabase calls
     async loadSchedule() {
         try {
-            const data = await fetchApprovedEvents('schedule');
-            this.approvedEvents = data.events;
+            // Use direct Supabase call like in GuestController
+            const response = await fetch(`${this.API_BASE}/event_plans?status=eq.Approved&select=*`, {
+                headers: {
+                    'apikey': this.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            }
+
+            const data = await response.json();
+            this.approvedEvents = data || [];
             
             // Populate client dropdown
             this.populateClientFilter();
             
-            // Return promise to ensure completion
             return true;
         } catch (error) {
+            console.error("Failed to load schedule:", error);
             showNotification("Failed to load schedule", "error");
             return false;
         }
     }
 
-    // POPULATE CLIENT FILTER
+    // ... rest of your ScheduleContainer methods remain the same
     populateClientFilter() {
         const clientDropdown = document.querySelector('.client-dropdown');
         if (!clientDropdown) return;
@@ -101,7 +115,7 @@ class ScheduleContainer {
                 </div>
             </div>
             `;
-        }
+    }
 
     filterByClient(clientName) {
         this.currentClientFilter = clientName;

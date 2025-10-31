@@ -95,6 +95,8 @@ io.on('connection', (socket) => {
   });
 });
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Your existing routes
 app.use("/api/auth", require("./routes/regularAdminAuth"));
 app.use("/api/admin", require("./routes/regularAdminLogs"));
@@ -104,6 +106,27 @@ app.use("/api/event-plans", require("./routes/event-plan"));
 app.use("/api/admin/event-plans", require("./routes/event-auth"));
 app.use("/api/admin/notifications", require('./routes/notifications'));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+if (isProduction) {
+  // Serve your built Electron files
+  app.use(express.static(path.join(__dirname, "../dist")));
+  
+  // Catch-all handler for SPA routing
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+} else {
+  // Development static serving (your existing code)
+  app.use(express.static(path.join(__dirname, "../")));
+  
+  app.use((req, res) => {
+    if (req.path.startsWith('/api/')) {
+      res.status(404).json({ error: "API endpoint not found" });
+    } else {
+      res.sendFile(path.join(__dirname, "../LandingPage.html"));
+    }
+  });
+}
 
 // Your existing routes continue...
 app.get("/api/test", (req, res) => {

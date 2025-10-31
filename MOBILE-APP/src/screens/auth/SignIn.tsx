@@ -3,16 +3,23 @@ import { StyleSheet, Text, View, Image, TextInput , TouchableOpacity, TouchableW
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import colors from '../config/colors';
-import { useNavigation } from '@react-navigation/native';
-import { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { Alert } from 'react-native';
 import { useFonts } from 'expo-font';
-import { signInWithEmail } from '../../lib/supabase-auth';
+
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../type';
+
+type SignInScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SignIn'>;
 
 import * as SecureStore from 'expo-secure-store';
-import { login } from '../auth/user-auth';
 import { useEvent } from '../../context/EventContext';
+
+import { login } from '../auth/user-auth';
+import { signInWithEmail } from '../../lib/supabase-auth';
+
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SignIn = () => {
@@ -28,6 +35,9 @@ const SignIn = () => {
 
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   
@@ -37,57 +47,73 @@ const SignIn = () => {
     Keyboard.dismiss();
   };
 
-  const navigation: NavigationProp<ParamListBase> = useNavigation();
+  const navigation = useNavigation<SignInScreenNavigationProp>();
   const { loadEventData, resetEventState, recoverEventData } = useEvent();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState<boolean>(false);
 
-const handleSignIn = async () => {
-  setLoading(true);
-  try {
-    const { user, session } = await signInWithEmail(email, password);
-    
-    console.log('🆕 Logging in as:', user.id);
+  useEffect(() => {
+    checkRememberedUser();
+  }, []);
 
-    // Store credentials
-    if (session?.access_token) {
-      await SecureStore.setItemAsync('userToken', session.access_token);
-    }
-    await SecureStore.setItemAsync('userId', String(user.id));
-    await SecureStore.setItemAsync('userEmail', String(user.email));
-
-    // ✅ FIRST: Try to load existing data
-    await loadEventData();
-
-    // ✅ SECOND: If no data found, try to recover from backend
-    const currentData = await AsyncStorage.getItem(eventKeyFor(user.id));
-    if (!currentData || currentData === '{}') {
-      console.log('🔄 No local data, attempting recovery...');
-      const recovered = await recoverEventData();
-      if (recovered) {
-        console.log('✅ Data recovered successfully!');
-      }
-    }
-
-    navigation.navigate('Home');
-  } catch (err: any) {
-    Alert.alert("Error", err.message || "Invalid email or password");
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // Helper function to check for existing data
-  const checkForExistingEventData = async (userId: string): Promise<boolean> => {
+  const checkRememberedUser = async () => {
     try {
-      const eventData = await AsyncStorage.getItem(`eventData_${userId}`);
-      const hasData = !!eventData && eventData.length > 50; // Basic validation
-      console.log('📊 Existing data check:', hasData ? 'Data found' : 'No data');
-      return hasData;
+      const rememberMeStatus = await AsyncStorage.getItem('rememberMe');
+      const token = await SecureStore.getItemAsync('userToken');
+
+      if (rememberMeStatus === 'true' && token) {
+        console.log('Auto-login using stored token...');
+        navigation.replace('Home');
+      }
     } catch (error) {
-      console.error('Error checking existing data:', error);
-      return false;
+      console.error('Error checking remembered user:', error);
+    }
+  };
+
+  const toggleShowPassword = () => {
+    setShowPassword(!showPassword);
+  };
+
+  const toggleRememberMe = () => {
+    setRememberMe(!rememberMe);
+  };
+
+  const handleSignIn = async () => {
+    setLoading(true);
+    try {
+      const { user, session } = await signInWithEmail(email, password);
+      console.log('Logging in as:', user.id);
+
+      // Always store the token securely
+      if (session?.access_token) {
+        await SecureStore.setItemAsync('userToken', session.access_token);
+        await SecureStore.setItemAsync('userId', String(user.id));
+        await SecureStore.setItemAsync('userEmail', String(user.email));
+      }
+
+      // Handle remember me preference
+      if (rememberMe) {
+        await AsyncStorage.setItem('rememberMe', 'true');
+      } else {
+        await AsyncStorage.setItem('rememberMe', 'false');
+      }
+
+      // Continue app logic
+      await loadEventData();
+
+      const currentData = await AsyncStorage.getItem(eventKeyFor(user.id));
+      if (!currentData || currentData === '{}') {
+        console.log('No local data, attempting recovery...');
+        const recovered = await recoverEventData();
+        if (recovered) console.log('Data recovered successfully!');
+      }
+
+      navigation.navigate('Home');
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Invalid email or password");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -126,34 +152,59 @@ const handleSignIn = async () => {
                 styles.textInput,
                 isEmailFocused && styles.textInputFocused
               ]}
-              onFocus={() => {
-                setIsEmailFocused(true);
-              }}
-              onBlur={() => {
-                setIsEmailFocused(false);
-              }}
+              onFocus={() => setIsEmailFocused(true)}
+              onBlur={() => setIsEmailFocused(false)}
             />
 
-            <TextInput
-              ref={passwordRef}
-              placeholder='Password'
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword} 
-              secureTextEntry={true}
-              autoComplete="password"
-              editable={!loading}
-              style={[
-                styles.textInput,
-                isPasswordFocused && styles.textInputFocused
-              ]}
-              onFocus={() => {
-                setIsPasswordFocused(true);
-              }}
-              onBlur={() => {
-                setIsPasswordFocused(false);
-              }}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                ref={passwordRef}
+                placeholder='Password'
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword} 
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+                editable={!loading}
+                style={[
+                  styles.textInput,
+                  styles.passwordInput,
+                  isPasswordFocused && styles.textInputFocused
+                ]}
+                onFocus={() => setIsPasswordFocused(true)}
+                onBlur={() => setIsPasswordFocused(false)}
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon}
+                onPress={toggleShowPassword}
+                disabled={loading}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-off" : "eye"} 
+                  size={24} 
+                  color="#999" 
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Remember Me Checkbox */}
+            <View style={styles.rememberMeContainer}>
+              <TouchableOpacity 
+                style={styles.checkbox}
+                onPress={toggleRememberMe}
+                disabled={loading}
+              >
+                <View style={[
+                  styles.checkboxBox,
+                  rememberMe && styles.checkboxBoxChecked
+                ]}>
+                  {rememberMe && (
+                    <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={styles.rememberMeText}>Remember Me</Text>
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity 
               style={[styles.submitBtn, loading && { opacity: 0.5 }]}
@@ -181,8 +232,7 @@ const handleSignIn = async () => {
             >
             <Text style={styles.loginText}>
                 Don't have an account?{' '}
-                <Text 
-                  style={styles.loginLink}>
+                <Text style={styles.loginLink}>
                   Sign Up
                 </Text>
             </Text>
@@ -212,9 +262,9 @@ const styles = StyleSheet.create({
   },
 
   textInput: {
-    color: '#000000',
     borderWidth: 1,
     width: wp('80%'),
+    color: '#000000',
     fontSize: wp('3.6%'),
     borderRadius: wp('10%'),
     borderColor: colors.border,
@@ -263,9 +313,65 @@ const styles = StyleSheet.create({
   },
 
   loginText: {},
-  
+
   loginLink: {
     fontWeight: 'bold',
+  },
+
+  passwordContainer: {
+    position: 'relative',
+    width: wp('80%'),
+    alignSelf: 'center',
+  },
+
+  passwordInput: {
+    paddingRight: 50,
+  },
+
+  eyeIcon: {
+    position: 'absolute',
+    right: wp('5%'),
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 40,
+    height: '100%',
+  },
+
+  // Remember Me Styles
+  rememberMeContainer: {
+    width: wp('80%'),
+    alignSelf: 'center',
+  },
+
+  checkbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderRadius: 4,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+
+  checkboxBoxChecked: {
+    backgroundColor: colors.button, // Use your button color
+    borderColor: colors.button,
+  },
+
+  rememberMeText: {
+    fontSize: wp('3.2%'),
+    fontFamily: 'Poppins',
+    color: '#000',
   },
 });
 

@@ -6,44 +6,69 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const pool = require('../db');
 const { authenticateToken } = require ('./middleware/mobile-auth');
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 const router = express.Router();
+// --- Nodemailer Transporter ---
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+
+  debug: true,
+  logger: true
+});
 
 // DEBUG: Check if env variables are loaded
 console.log('📧 EMAIL_USER:', process.env.EMAIL_USER ? 'LOADED' : '❌ MISSING');
 console.log('📧 EMAIL_PASS:', process.env.EMAIL_PASS ? 'LOADED' : '❌ MISSING');
+console.log('🔐 SUPABASE_URL:', process.env.SUPABASE_URL ? 'LOADED' : '❌ MISSING');
 
 router.post('/signup', async (req, res) => {
     console.log('Signup request received:', req.body);
     const { first_name, last_name, email, phone, password } = req.body;
 
     try {
-        // 1. check if users already exist
-        const userCheck = await pool.query(
-            'SELECT * from mobile_users WHERE email = $1',
-            [email]    
-        );
-
-        if (userCheck.rows.length > 0) {
-            return res.status(400).json({ error: 'User already exists' });
-        }
-
-        // 2. Hash password
+        // 1. Hash password first
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 3. Insert new user
+        // 2. Create user in Supabase
+        const { data: supabaseData, error: supabaseError } = await supabase.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true, // Auto-confirm for mobile
+            user_metadata: {
+                first_name,
+                last_name,
+                phone
+            }
+        });
+
+        if (supabaseError) {
+            console.error('Supabase error:', supabaseError);
+            return res.status(400).json({ error: supabaseError.message });
+        }
+
+        const supabaseUser = supabaseData.user;
+
+        // 3. Create user in your database with Supabase UUID
         const newUser = await pool.query(
-            `INSERT INTO mobile_users (first_name, last_name, email, phone, password)
-            VALUES ($1, $2, $3, $4, $5) RETURNING id, first_name, last_name, email, phone, role`,
-            [first_name, last_name, email, phone, hashedPassword]
+            `INSERT INTO mobile_users (first_name, last_name, email, phone, password, supabase_uuid)
+            VALUES ($1, $2, $3, $4, $5, $6) 
+            RETURNING id, first_name, last_name, email, phone, role, supabase_uuid`,
+            [first_name, last_name, email, phone, hashedPassword, supabaseUser.id]
         );
 
         const user = newUser.rows[0];
 
-        // 4. Generate token
+        // 4. Generate your JWT token
         const token = jwt.sign(
             { 
                 id: user.id, 
+                supabase_uuid: user.supabase_uuid,
                 email: user.email, 
                 role: user.role 
             },
@@ -53,11 +78,12 @@ router.post('/signup', async (req, res) => {
             }
         );
 
-        // 5. Return token + user
+        // 5. Return token and user data
         res.json({
             token,
             user: {
                 id: user.id,
+                supabase_uuid: user.supabase_uuid,
                 first_name: user.first_name,
                 last_name: user.last_name,
                 email: user.email,
@@ -68,7 +94,7 @@ router.post('/signup', async (req, res) => {
         console.error(err.message);
         res.status(500).json({ error: 'Server error' });
     }
-})
+});
 
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -94,7 +120,12 @@ router.post('/login', async (req, res) => {
 
         // generate token
         const token = jwt.sign(
-            { id: user.id, email: user.email, role: user.role },
+            { 
+                id: user.id, 
+                supabase_uuid: user.supabase_uuid, // Include if exists
+                email: user.email, 
+                role: user.role 
+            },
             process.env.JWT_SECRET,
             { expiresIn: '12h' }
         );
@@ -105,6 +136,7 @@ router.post('/login', async (req, res) => {
             token, 
             user: { 
                 id: user.id,
+                supabase_uuid: user.supabase_uuid,
                 first_name: user.first_name, 
                 last_name: user.last_name,
                 email: user.email, 
@@ -116,7 +148,41 @@ router.post('/login', async (req, res) => {
         console.error(err.message);
         res.status(500).json({ error: 'Server error' });
     }
-})
+});
+
+router.get('/user-data', authenticateToken, async (req, res) => {
+    try {
+        let user;
+        
+        // If user has supabase_uuid (new system)
+        if (req.user.supabase_uuid) {
+            const result = await pool.query(
+                `SELECT id, first_name, last_name, email, phone, role, supabase_uuid
+                 FROM mobile_users WHERE supabase_uuid = $1`,
+                [req.user.supabase_uuid]
+            );
+            user = result.rows[0];
+        } 
+        // Fallback to numeric ID (old system)
+        else {
+            const result = await pool.query(
+                `SELECT id, first_name, last_name, email, phone, role
+                 FROM mobile_users WHERE id = $1`,
+                [req.user.id]
+            );
+            user = result.rows[0];
+        }
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json(user);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 
 router.get('/mobile-users', authenticateToken, async (req, res) => {
     try {
@@ -130,18 +196,6 @@ router.get('/mobile-users', authenticateToken, async (req, res) => {
         console.error(err.message);
         res.status(500).json({ error: 'Server error' });
     }
-})
-
-// --- Nodemailer Transporter ---
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-
-  debug: true,
-  logger: true
 });
 
 // --- FORGOT PASSWORD ---

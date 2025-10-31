@@ -12,6 +12,7 @@ import { signUpWithEmail } from '../../lib/supabase-auth';
 import { signup } from '../auth/user-auth';
 import { useEvent } from '../../context/EventContext';
 import * as SecureStore from 'expo-secure-store';
+import { Ionicons } from '@expo/vector-icons';
 
 const SignUp = () => {
   const [firstName, setFirstName] = useState('');
@@ -19,6 +20,7 @@ const SignUp = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { resetEventSubmission, loadEventData } = useEvent();
 
@@ -50,7 +52,7 @@ const SignUp = () => {
         throw new Error('User creation failed - no user returned');
       }
 
-      console.log('🆕 NEW USER SIGNED UP:', user.id);
+      console.log('NEW USER SIGNED UP:', user.id);
 
       await resetEventSubmission?.();
 
@@ -60,11 +62,11 @@ const SignUp = () => {
       await SecureStore.setItemAsync('userId', String(user.id));
       await SecureStore.setItemAsync('userEmail', String(user.email!));
       
-      console.log('✅ New user credentials stored:', user.id);
+      console.log('New user credentials stored:', user.id);
 
       await loadEventData();
 
-      Alert.alert("Success", "Account created successfully! Please check your email to verify your account.");
+      Alert.alert("Success", "Account created successfully!");
       navigation.navigate("ChooseEvent");
       
     } catch (err: any) {
@@ -173,30 +175,45 @@ const SignUp = () => {
                         onBlur={() => setIsEmailFocused(false)}
                       />
 
+                      <View style={styles.passwordContainer}>
                       <TextInput
                         ref={passwordRef}
                         placeholder='Password'
                         placeholderTextColor="#999"
                         value={password}
                         onChangeText={setPassword}
-                        secureTextEntry
+                        secureTextEntry={!showPassword}
                         style={[
                           styles.textInput,
-                          isPasswordFocused && styles.textInputFocused
+                          isPasswordFocused && styles.textInputFocused,
+                          { paddingRight: wp('12%') } // add space for the icon
                         ]}
                         onFocus={() => setIsPasswordFocused(true)}
-                        onBlur={() => setIsPasswordFocused(false)}        
+                        onBlur={() => setIsPasswordFocused(false)}
                       />
-                      
-                      <TouchableOpacity 
-                        style={[styles.submitBtn, loading && { opacity: 0.5 }]}
-                        onPress={handleSignUp}
-                        disabled={!!loading}
+
+                      <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        style={styles.eyeIcon}
                       >
-                        <Text style={styles.submitText}>
-                          {loading ? 'SIGNING UP...' : 'SIGN UP'}
-                        </Text>
+                        <Ionicons
+                          name={showPassword ? 'eye' : 'eye-off'}
+                          size={wp('5%')}
+                          color="#999"
+                        />
                       </TouchableOpacity>
+                    </View>
+
+                    {/* SIGN UP BUTTON */}
+                    <TouchableOpacity 
+                      style={[styles.submitBtn, loading && { opacity: 0.5 }]}
+                      onPress={handleSignUp}
+                      disabled={!!loading}
+                    >
+                      <Text style={styles.submitText}>
+                        {loading ? 'SIGNING UP...' : 'SIGN UP'}
+                      </Text>
+                    </TouchableOpacity>
                     </View>
                   </ScrollView>
                 </KeyboardAwareScrollView>
@@ -287,6 +304,19 @@ const styles = StyleSheet.create({
 
   loginText: {},
   topText: {},
+
+  passwordContainer: {
+    position: 'relative',
+    width: wp('80%'),
+    justifyContent: 'center',
+  },
+
+  eyeIcon: {
+    position: 'absolute',
+    right: wp('4%'),
+    top: '50%',
+    transform: [{ translateY: -wp('2.5%') }],
+  },
 });
 
 export default SignUp;

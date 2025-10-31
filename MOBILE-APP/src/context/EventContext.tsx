@@ -313,7 +313,8 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         .from('event_guests')
         .update({ 
           invite_link: inviteLink,
-          invite_token: inviteToken
+          invite_token: inviteToken,
+          mobile_guest_id: guestId
         })
         .eq('id', guestData.id); // Use the numeric database ID
 
@@ -321,6 +322,19 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         console.error('❌ Error updating guest with invite link:', updateError);
         throw updateError;
       }
+
+      console.log('✅ Guest updated successfully');
+
+      // Verify what was actually saved
+      const { data: verifiedGuest, error: verifyError } = await supabase
+        .from('event_guests')
+        .select('id, guest_name, mobile_guest_id, invite_token, event_plan_id, invite_link')
+        .eq('id', guestData.id)
+        .single();
+
+      console.log('✅ VERIFIED GUEST DATA IN DATABASE:', verifiedGuest);
+      console.log('🔗 EXPECTED URL:', inviteLink);
+      console.log('🔗 ACTUAL TOKEN IN DB:', verifiedGuest?.invite_token);
 
       console.log('✅ Guest updated with invite link successfully');
       return inviteLink;
@@ -985,37 +999,43 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
   const submitEventToDesktop = async (): Promise<any> => {
     try {
       console.log('🚀 Starting submission to Supabase...');
-      
+
+      // Get current user
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) throw new Error("Not authenticated");
 
       const eventSummary = getEventSummary();
-      
+
       if (!eventSummary.eSignature) throw new Error("E-Signature required");
 
       console.log('🌐 Saving to Supabase...');
-      
-      // Insert event plan with ALL fields
+
+      // Insert event plan to Supabase — matching new table columns
       const { data, error } = await supabase
         .from('event_plans')
         .insert([
           {
-            user_uuid: user.id,
+            user_uuid: user.id, // ✅ Authenticated user from Supabase
             event_type: eventSummary.event_type,
-            package: eventSummary.selected_package?.name || eventSummary.guest_range || null,
+            package_name: eventSummary.selected_package?.name || eventSummary.guest_range || null,
+            package_price: Number(
+              (eventSummary.package_price || '0')
+                .toString()
+                .replace(/[^0-9.]/g, '')
+            ),
             client_name: eventSummary.client_name || eventSummary.full_client_name,
             partner_name: eventSummary.partner_name,
+            client_first_name: eventSummary.client_first_name || null,
+            client_last_name: eventSummary.client_last_name || null,
             event_date: eventSummary.event_date,
             guest_count: eventSummary.totalGuests || eventSummary.guest_range,
-            budget: eventSummary.totalBudget,
-            status: 'Pending',
+            guest_range: eventSummary.guest_range || null,
             expenses: eventSummary.budget,
             category: eventSummary.event_type,
-            client_email: eventSummary.client_email,
-            client_phone: eventSummary.client_phone,
-            venue: eventSummary.venue?.name || eventSummary.venue,
+            e_signature: eventSummary.eSignature,
             event_segments: JSON.stringify(eventSummary.schedule),
-            eSignature: eventSummary.eSignature,
+            status: 'Pending',
+            admin_id: null, // ✅ Optional — safely left null for now
           }
         ])
         .select()
@@ -1026,18 +1046,16 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         throw new Error(`Failed to save event: ${error.message}`);
       }
 
-      // FIX: Insert guests with proper typing
+      // ✅ Save guests (if any)
       if (eventSummary.guests && eventSummary.guests.length > 0) {
         console.log('👥 Saving guests:', eventSummary.guests);
-        
-        const guestInserts: any[] = eventSummary.guests.map((guest: Guest) => ({
+
+        const guestInserts = eventSummary.guests.map((guest: Guest) => ({
           event_plan_id: data.id,
           guest_name: guest.name || guest.guest_name || '',
           status: guest.status || 'Pending',
           invite_link: guest.inviteLink || guest.invite_link || null,
         }));
-
-        console.log('👥 Guest inserts:', guestInserts);
 
         const { error: guestsError } = await supabase
           .from('event_guests')
@@ -1054,10 +1072,9 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
       }
 
       console.log('✅ Event saved successfully with ID:', data.id);
-      
       await markEventAsSubmitted();
-
       return data;
+
     } catch (err) {
       console.error('Submission error:', err);
       throw err;

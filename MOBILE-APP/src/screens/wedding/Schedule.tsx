@@ -578,6 +578,7 @@ inputNotes: {
     borderRadius: 9,
     width: wp("76%"),
     height: hp("6%"),
+    fontFamily: 'Poppins',
     textAlignVertical: "top",
     paddingHorizontal: wp("3%"),
     borderColor: colors.borderv3,

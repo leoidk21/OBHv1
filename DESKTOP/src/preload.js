@@ -1,20 +1,40 @@
-const { contextBridge, ipcRenderer } = require('electron')
 const os = require('os')
 const fs = require('fs')
 const path = require('path')
+const { contextBridge } = require('electron');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseClient = createClient(
+  'https://vxukqznjkdtuytnkhldu.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA' // your actual key
+);
+
+// Expose to renderer process
+contextBridge.exposeInMainWorld('supabase', {
+  auth: {
+    signUp: (credentials) => supabase.auth.signUp(credentials),
+    signInWithPassword: (credentials) => supabase.auth.signInWithPassword(credentials),
+    signOut: () => supabase.auth.signOut(),
+    getSession: () => supabase.auth.getSession(),
+    onAuthStateChange: (callback) => supabase.auth.onAuthStateChange(callback)
+  },
+  from: (table) => supabase.from(table),
+  // Alternative: expose the entire client
+  client: supabase
+});
 
 /**
  * IPC Bridge (main <-> renderer)
  */
 contextBridge.exposeInMainWorld('api', {
   send: (channel, data) => {
-    const validChannels = ['toMain'] // whitelist outbound channels
+    const validChannels = ['toMain']
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data)
     }
   },
   receive: (channel, func) => {
-    const validChannels = ['fromMain'] // whitelist inbound channels
+    const validChannels = ['fromMain']
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (event, ...args) => func(...args))
     }

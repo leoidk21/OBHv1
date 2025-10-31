@@ -18,7 +18,7 @@ import { BudgetIcon } from "../../icons/BudgetIcon";
 import { ESignatureIcon } from "../../icons/ESignatureIcon";
 import { ChecklistIcon } from "../../icons/ChecklistIcon";
 
-import { getUserData } from "../../auth/user-auth"; 
+import { getUserData, fetchUserData } from "../../auth/user-auth"; 
 
 const NavigationSlider: React.FC<{ headerTitle?: string }> = ({ headerTitle }) => {
   const [user, setUser] = useState<any>(null);
@@ -30,10 +30,19 @@ const NavigationSlider: React.FC<{ headerTitle?: string }> = ({ headerTitle }) =
 
   const loadUserData = async () => {
     try {
+      // FORCE FRESH DATA EVERY TIME
+      const freshData = await fetchUserData();
+      if (freshData) {
+        setUser(freshData);
+        return;
+      }
+      
+      // FALLBACK
       const userData = await getUserData();
       setUser(userData);
     } catch (error) {
-      console.error('Error loading user data:', error);
+      const userData = await getUserData();
+      setUser(userData);
     }
   };
 
@@ -45,7 +54,8 @@ const NavigationSlider: React.FC<{ headerTitle?: string }> = ({ headerTitle }) =
   const slideAnimation = useRef(new Animated.Value(-wp("80%"))).current;
   const overlayAnimation = useRef(new Animated.Value(0)).current;
 
-  const openSlider = () => {
+   const openSlider = () => {
+    loadUserData();
     setSidebarVisible(true);
     Animated.parallel([
       Animated.timing(slideAnimation, {

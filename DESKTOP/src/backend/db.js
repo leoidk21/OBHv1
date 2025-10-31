@@ -1,34 +1,79 @@
-const { Pool } = require('pg');
-require('dotenv').config();
+const supabase = require('./supabase');
 
-console.log('🔧 Debug - Environment variables in db.js:');
-console.log('DB_USER:', process.env.DB_USER || 'UNDEFINED');
-console.log('DB_HOST:', process.env.DB_HOST || 'UNDEFINED');
-console.log('DB_NAME:', process.env.DB_NAME || 'UNDEFINED');
-console.log('DB_PORT:', process.env.DB_PORT || 'UNDEFINED');
-console.log('DB_PASSWORD:', process.env.DB_PASSWORD ? '***' : 'MISSING');
-
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT || 6543, // Supabase Pooler port
-  ssl: { rejectUnauthorized: false },
-  max: 5, // limit connections to avoid overload
-});
-
-pool.on('error', (err) => {
-  console.error('⚠️ Unexpected database error:', err.message);
-});
-
-(async () => {
-  try {
-    const res = await pool.query('SELECT NOW()');
-    console.log('✅ Connected to Supabase Pooler at:', res.rows[0].now);
-  } catch (err) {
-    console.error('❌ Database connection failed:', err.message);
+// Helper functions to convert Supabase responses to match your existing code
+const handleSupabaseResponse = (response, operation = 'query') => {
+  if (response.error) {
+    console.error(`Supabase ${operation} error:`, response.error);
+    throw response.error;
   }
-})();
+  return response;
+};
+
+// Convert to pool-like interface for easy migration
+const pool = {
+  query: async (text, params = []) => {
+    try {
+      // For SELECT queries
+      if (text.trim().toUpperCase().startsWith('SELECT')) {
+        const response = await supabase
+          .from(text.match(/FROM\s+(\w+)/i)?.[1] || 'admins')
+          .select('*');
+        
+        return handleSupabaseResponse(response, 'select');
+      }
+      
+      // For INSERT queries
+      if (text.trim().toUpperCase().startsWith('INSERT')) {
+        const tableMatch = text.match(/INSERT\s+INTO\s+(\w+)/i);
+        if (tableMatch) {
+          const table = tableMatch[1];
+          const valuesMatch = text.match(/VALUES\s*\(([^)]+)\)/i);
+          if (valuesMatch) {
+            const response = await supabase
+              .from(table)
+              .insert({/* your data here */})
+              .select();
+            
+            return handleSupabaseResponse(response, 'insert');
+          }
+        }
+      }
+      
+      // For UPDATE queries
+      if (text.trim().toUpperCase().startsWith('UPDATE')) {
+        const tableMatch = text.match(/UPDATE\s+(\w+)/i);
+        if (tableMatch) {
+          const response = await supabase
+            .from(tableMatch[1])
+            .update({/* your data here */})
+            .eq('id', params[params.length - 1]) // Assuming last param is ID
+            .select();
+          
+          return handleSupabaseResponse(response, 'update');
+        }
+      }
+      
+      // For DELETE queries
+      if (text.trim().toUpperCase().startsWith('DELETE')) {
+        const tableMatch = text.match(/FROM\s+(\w+)/i);
+        if (tableMatch) {
+          const response = await supabase
+            .from(tableMatch[1])
+            .delete()
+            .eq('id', params[0])
+            .select();
+          
+          return handleSupabaseResponse(response, 'delete');
+        }
+      }
+      
+      throw new Error(`Unsupported query type: ${text}`);
+      
+    } catch (error) {
+      console.error('Database query error:', error);
+      throw error;
+    }
+  }
+};
 
 module.exports = pool;

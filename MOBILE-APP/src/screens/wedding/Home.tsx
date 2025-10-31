@@ -29,19 +29,11 @@ import { AccountSvg } from "../icons/svg/AccountSvg";
 import { useEvent } from '../../context/EventContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
-
 import { Alert } from 'react-native'
-   type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-   const ProgressBar = ({ progress }: { progress: number }) => {
-      return (
-      <View style={styles.progressBarContainer}>
-         <View style={[styles.progressBar, { width: `${progress}%` }]} />
-      </View>
-      );
-   };
+type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-   const Home = () => {
+const Home = () => {
       const [fontsLoaded] = useFonts({
          'Poppins': require('../../assets/fonts/Poppins-Regular.ttf'),
          'Loviena': require('../../assets/fonts/lovienapersonaluseonlyregular-yy4pq.ttf'),

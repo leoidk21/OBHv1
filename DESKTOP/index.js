@@ -1,19 +1,6 @@
 const { app, BrowserWindow, Menu } = require('electron')
 const path = require('path')
 
-// Development hot reload
-if (process.env.NODE_ENV === 'development') {
-  try {
-    require('electron-reload')(__dirname, {
-      electron: require('electron'),
-      hardResetMethod: 'exit',
-      awaitWriteFinish: true
-    });
-  } catch (error) {
-    console.log('Electron-reload not available in production')
-  }
-}
-
 let mainWindow
 
 const createWindow = () => {
@@ -30,11 +17,15 @@ const createWindow = () => {
     }
   })
 
+  // LOAD DIRECTLY - NO SERVER NEEDED!
   mainWindow.loadFile(
     path.join(__dirname, 'src', 'renderer', 'Pages', 'Auth', 'LoginPage.html')
   )
 
-  // Context menu for development
+  // Remove the server startup code completely
+  // No more localhost, no more Express server
+
+  // Rest of your code...
   mainWindow.webContents.on('context-menu', (event, params) => {
     const menu = Menu.buildFromTemplate([
       {

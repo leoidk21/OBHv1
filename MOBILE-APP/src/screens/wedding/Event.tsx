@@ -36,18 +36,18 @@ const Event = () => {
             // Method 1: Check SecureStore (where your login actually saves it)
             const token = await SecureStore.getItemAsync('userToken');
             if (token) {
-                console.log('✅ Token found in SecureStore');
+                console.log('Token found in SecureStore');
                 return token;
             }
             
             // Method 2: Fallback to AsyncStorage (just in case)
             const asyncToken = await AsyncStorage.getItem('userToken');
             if (asyncToken) {
-                console.log('✅ Token found in AsyncStorage');
+                console.log('Token found in AsyncStorage');
                 return asyncToken;
             }
             
-            console.log('❌ No token found in SecureStore or AsyncStorage');
+            console.log('No token found in SecureStore or AsyncStorage');
             return null;
         } catch (error) {
             console.error('Error retrieving token:', error);
@@ -63,7 +63,7 @@ const Event = () => {
                 
                 if (userIdStr) {
                     setUserId(userIdStr);
-                    console.log('👤 User ID from SecureStore:', userIdStr);
+                    console.log('User ID from SecureStore:', userIdStr);
                     return;
                 }
                 
@@ -72,7 +72,7 @@ const Event = () => {
                 if (userData) {
                     const user = JSON.parse(userData);
                     setUserId(String(user.id));
-                    console.log('👤 User ID from AsyncStorage:', user.id);
+                    console.log('User ID from AsyncStorage:', user.id);
                 }
             } catch (error) {
                 console.log('Error getting user ID:', error);
@@ -106,7 +106,7 @@ const Event = () => {
     useEffect(() => {
         if (!userId) return;
 
-        console.log('🎯 Setting up Supabase real-time for user:', userId);
+        console.log('Setting up Supabase real-time for user:', userId);
 
         const subscription = supabase
             .channel(`user-${userId}-notifications`)

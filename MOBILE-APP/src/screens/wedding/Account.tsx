@@ -17,42 +17,101 @@ import * as SecureStore from 'expo-secure-store';
 import { getUserData, updateProfile, storeUserData } from "../auth/user-auth";
 import { logout } from "../auth/user-auth";
 import { useEvent } from "../../context/EventContext";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const Account  = () => {
-  const { resetEventSubmission, clearAllUserData } = useEvent(); // Get cleanup functions
-  const [modalVisible, setModalVisible] = React.useState(false);
+const Account = () => {
+  // Hooks & Context
+  const { resetEventSubmission, clearAllUserData } = useEvent();
   const { eventData } = useEvent();
+  const [modalVisible, setModalVisible] = React.useState(false);
+  const [user, setUser] = useState<any>(null);
 
-  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  
+  // User input states
+  const [firstName, setFirstName] = useState<string>('');
+  const [lastName, setLastName] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+
+  //  Countdown state
+  const [countdown, setCountdown] = useState({ 
+    days: 0, 
+    hours: 0, 
+    minutes: 0, 
+    seconds: 0 
+  });
+
+  // Clear "remember me" on mount
   useEffect(() => {
-      if (eventData.event_date) {
-        const updateCountdown = () => {
-          const now = new Date().getTime();
-          const eventTime = new Date(eventData.event_date).getTime();
-          const difference = eventTime - now;
+    const clearRememberMe = async () => {
+      await AsyncStorage.removeItem('rememberMe');
+    };
+    clearRememberMe();
+  }, []);
+
+  // Event countdown updater
+  useEffect(() => {
+    if (eventData.event_date) {
+      const updateCountdown = () => {
+        const now = new Date().getTime();
+        const eventTime = new Date(eventData.event_date).getTime();
+        const difference = eventTime - now;
+
+        if (difference <= 0) {
+          setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+          return;
+        }
+
+  const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+  setCountdown({ days, hours, minutes, seconds });
+  };
+
+  updateCountdown();
+  const interval = setInterval(updateCountdown, 1000);
   
-          if (difference <= 0) {
-            setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-            return;
-          }
-  
-          const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-          const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-          const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-          const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-  
-          setCountdown({ days, hours, minutes, seconds });
-        };
-  
-        updateCountdown();
-        const interval = setInterval(updateCountdown, 1000);
-  
-        return () => clearInterval(interval);
-      }
+  return () => clearInterval(interval);
+    }
   }, [eventData.event_date]);
 
-    // Format date for display
+  // Load user data on mount
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  // Sync form fields with loaded user
+  useEffect(() => {
+    if (user) {
+      setFirstName(user.first_name);
+      setLastName(user.last_name);
+      setEmail(user.email);
+    }
+  }, [user]);
+
+  // FUNCTIONS ————————————————————————————————
+
+  // Load user data
+  const loadUserData = async () => {
+    try {
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        return;
+      }
+
+      const userData = await getUserData();
+      setUser(userData);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      const userData = await getUserData();
+      setUser(userData);
+    }
+  };
+
+  // Format date display
   const formatEventDate = (dateString: string) => {
     if (!dateString) return 'Date not set';
     const date = new Date(dateString);
@@ -63,110 +122,76 @@ const Account  = () => {
     });
   };
 
+  // Handle profile save/update
+  const handleSave = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const result = await updateProfile(firstName, lastName, email);
+
+      if (result && result.user) {
+        await loadUserData();
+        setModalVisible(false);
+        Alert.alert('Success', 'Profile updated successfully!');
+      } else {
+        throw new Error('Failed to update profile');
+      }
+    } catch (error: any) {
+      const errorMsg = error.message || 'Failed to update profile';
+      setError(errorMsg);
+      Alert.alert('Error', errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle navigation option
   const handleOptionPress = (screen: string) => {
     setModalVisible(false);
     setTimeout(() => navigation.navigate(screen), 100);
   };
 
-  // load user data
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      const userData = await getUserData();
-      setUser(userData);
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
-
+  // Handle logout
   const handleLogout = async () => {
     Alert.alert(
-      "Logout", 
-      "Are you sure you want to logout?", 
+      "Logout",
+      "Are you sure you want to logout?",
       [
+        { text: "Cancel", style: "cancel" },
         {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
+          text: "Logout",
+          style: "destructive",
           onPress: async () => {
             try {
-              console.log('🚪 Logging out...');
+              console.log("Logging out...");
 
-              // ✅ ONLY CLEAR AUTH TOKENS, NOT EVENT DATA
               await Promise.all([
                 SecureStore.deleteItemAsync('userToken'),
                 SecureStore.deleteItemAsync('userId'),
                 SecureStore.deleteItemAsync('userEmail'),
-                logout() // Your existing logout
+                AsyncStorage.removeItem('rememberMe'),
+                logout()
               ]);
-              
-              console.log('✅ Logout complete - event data preserved');
-              
-              // Navigate to sign in
+
+              console.log("Logout complete - remember me cleared");
+
               navigation.reset({
                 index: 0,
                 routes: [{ name: "SignIn" }],
               });
             } catch (error) {
-              console.error('Logout error:', error);
+              console.error("Logout error:", error);
               navigation.reset({
                 index: 0,
                 routes: [{ name: "SignIn" }],
               });
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
-
-const [firstName, setFirstName] = useState<string>('');
-const [lastName, setLastName] = useState<string>('');
-const [email, setEmail] = useState<string>('');
-const [loading, setLoading] = useState<boolean>(false);
-const [error, setError] = useState<string>('');
-
-useEffect(() => {
-  if (user) {
-    setFirstName(user.first_name);
-    setLastName(user.last_name);
-    setEmail(user.email);
-  }
-}, [user]);
-
-const handleSave = async () => {
-  setLoading(true);
-  setError('');
-  
-  try {
-    await updateUserProfile({
-      first_name: firstName,
-      last_name: lastName,
-      email: email
-    });
-    
-    // Refresh user data
-    const updatedUser = await getCurrentUser();
-    setUser(updatedUser);
-    
-    setModalVisible(false);
-    Alert.alert('Success', 'Profile updated successfully!');
-  } catch (error: any) {
-    const errorMsg = error.message || 'Failed to update profile';
-    setError(errorMsg);
-    Alert.alert('Error', errorMsg);
-  } finally {
-    setLoading(false);
-  }
-};
 
 const navigation: NavigationProp<ParamListBase> = useNavigation();
 
@@ -206,11 +231,11 @@ const navigation: NavigationProp<ParamListBase> = useNavigation();
 
                   <Text style={styles.profileName}>
                     {user?.first_name && user?.last_name 
-                    ? `${user.first_name} ${user.last_name}` 
-                    : 'Loading...'}
+                      ? `${user.first_name} ${user.last_name}` 
+                      : 'Loading...'}
                   </Text>
                   <Text style={styles.profileEmail}>
-                    {user?.email}
+                    {user?.email || 'Loading...'}
                   </Text>
                   
                   <TouchableOpacity
@@ -359,79 +384,6 @@ const navigation: NavigationProp<ParamListBase> = useNavigation();
                       </View>
                     </View>
                     {/* WHEN */}
-
-                    {/* TIME */}
-                    <View style={styles.infoRowContainer}>
-                      <View style={styles.infoRow}>
-                          <Svg width="28" height="26" viewBox="0 0 24 24" fill="none">
-                              <Path
-                                  d="M12 23C18.0752 23 23 18.0752 23 12C23 5.92487 18.0752 1 12 1C5.92487 1 1 5.92487 1 12C1 18.0752 5.92487 23 12 23Z"
-                                  stroke="#343131"
-                                  stroke-width="1.5"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                              />
-                              <Path
-                                  d="M12 4.66663V12"
-                                  stroke="#343131"
-                                  stroke-width="1.5"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                              />
-                              <Path
-                                  d="M17.1822 17.1822L12 12"
-                                  stroke="#343131"
-                                  stroke-width="1.5"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                              />
-                          </Svg>
-                          <View>
-                              <Text style={styles.infoTitle}>Package</Text>
-                              <Text style={{ fontFamily: "Poppins" }}>{eventData.guest_range} Pax</Text>
-                          </View>
-                      </View>
-                      <View>
-                        <FontAwesomeIcon icon={faChevronRight} size={16} color="#333" />
-                      </View>
-                    </View>
-                    {/* TIME */}
-
-                    <View style={styles.infoRowContainer}>
-                      <View style={styles.infoRow}>
-                          <Svg width="28" height="26" viewBox="0 0 24 24" fill="none">
-                              <Path
-                                  d="M12 23C18.0752 23 23 18.0752 23 12C23 5.92487 18.0752 1 12 1C5.92487 1 1 5.92487 1 12C1 18.0752 5.92487 23 12 23Z"
-                                  stroke="#343131"
-                                  stroke-width="1.5"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                              />
-                              <Path
-                                  d="M12 4.66663V12"
-                                  stroke="#343131"
-                                  stroke-width="1.5"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                              />
-                              <Path
-                                  d="M17.1822 17.1822L12 12"
-                                  stroke="#343131"
-                                  stroke-width="1.5"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                              />
-                          </Svg>
-                          <View>
-                              <Text style={styles.infoTitle}>Price</Text>
-                              <Text style={{ fontFamily: "Poppins" }}>{eventData.package_price}</Text>
-                          </View>
-                      </View>
-                      <View>
-                        <FontAwesomeIcon icon={faChevronRight} size={16} color="#333" />
-                      </View>
-                    </View>
-                    {/* TIME */}
                 </View>
                 {/* -------- EVENT SUMMARY -------- */}
 
