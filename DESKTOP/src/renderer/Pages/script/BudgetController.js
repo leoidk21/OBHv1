@@ -472,7 +472,7 @@ class BudgetController {
                             <div class="event-details">${event.event_type}</div>
                         </div>
                     </td>
-                    <td>${event.package || 'N/A'}</td>
+                    <td>${event.guest_range || 'N/A'}</td>
                     <td>${this.formatDate(event.event_date)}</td>
                     <td><span class="status status-pending">Pending</span></td>
                     <td>

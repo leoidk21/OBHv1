@@ -50,7 +50,7 @@ const Home = () => {
 
       const isScheduleComplete = !!eventData.event_date;
       const isGuestComplete = !!eventData.guest_range;
-      const isBudgetComplete = !!eventData.package_price;
+      const isBudgetComplete = !!eventData.package_price || !!(eventData.budget && eventData.budget.length > 0);
       const isSignatureComplete = !!eventData.signature;
 
       // Calculate overall completion percentage
@@ -163,7 +163,7 @@ const Home = () => {
       event_type: !eventData.wedding_type,
       event_date: !eventData.event_date,
       guest_range: !eventData.guest_range,
-      package_price: !eventData.package_price,
+      package_price: !eventData.package_price && (!eventData.budget || eventData.budget.length === 0),
    };
 
    // Format date for display

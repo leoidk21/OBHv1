@@ -507,19 +507,15 @@ if (window.__LandingPageModuleInstance) {
                     <div class="detail-row">
                         <strong>Package:</strong>
                         <!-- FIX: Use guest_range instead of package since package is null -->
-                        <span>${escapeHtml(event.event_package || "Not specified")}</span>
+                        <span>${escapeHtml(event.package_name || "Not specified")} Pax</span>
                     </div>
                     <div class="detail-row">
                         <strong>Event Date:</strong>
                         <span>${formatDate(event.event_date)}</span>
                     </div>
                     <div class="detail-row">
-                        <strong>Guest Count:</strong>
-                        <span>${event.guest_count || 0} Pax</span>
-                    </div>
-                    <div class="detail-row">
-                        <strong>Budget:</strong>
-                        <span>₱${formatNumber(event.budget || 0)}</span>
+                        <strong>Package:</strong>
+                        <span>${event.package_price || 0}</span>
                     </div>
                     <!-- Show event segments if available -->
                     ${segments.length > 0 ? `

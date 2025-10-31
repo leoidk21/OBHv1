@@ -48,7 +48,7 @@ const Payment = () => {
           *,
           event_plans (
             event_type,
-            package,
+            package_price,
             event_date
           )
         `)

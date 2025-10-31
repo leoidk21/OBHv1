@@ -1,7 +1,7 @@
 const os = require('os')
 const fs = require('fs')
 const path = require('path')
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseClient = createClient(
@@ -12,15 +12,15 @@ const supabaseClient = createClient(
 // Expose to renderer process
 contextBridge.exposeInMainWorld('supabase', {
   auth: {
-    signUp: (credentials) => supabase.auth.signUp(credentials),
-    signInWithPassword: (credentials) => supabase.auth.signInWithPassword(credentials),
-    signOut: () => supabase.auth.signOut(),
-    getSession: () => supabase.auth.getSession(),
-    onAuthStateChange: (callback) => supabase.auth.onAuthStateChange(callback)
+    signUp: (credentials) => supabaseClient.auth.signUp(credentials),
+    signInWithPassword: (credentials) => supabaseClient.auth.signInWithPassword(credentials),
+    signOut: () => supabaseClient.auth.signOut(),
+    getSession: () => supabaseClient.auth.getSession(),
+    onAuthStateChange: (callback) => supabaseClient.auth.onAuthStateChange(callback)
   },
-  from: (table) => supabase.from(table),
+  from: (table) => supabaseClient.from(table),
   // Alternative: expose the entire client
-  client: supabase
+  client: supabaseClient
 });
 
 /**
