@@ -510,12 +510,12 @@ if (window.__LandingPageModuleInstance) {
                         <span>${escapeHtml(event.package_name || "Not specified")} Pax</span>
                     </div>
                     <div class="detail-row">
-                        <strong>Event Date:</strong>
-                        <span>${formatDate(event.event_date)}</span>
+                        <strong>Price:</strong>
+                        <span>${event.package_price || 0}</span>
                     </div>
                     <div class="detail-row">
-                        <strong>Package:</strong>
-                        <span>${event.package_price || 0}</span>
+                        <strong>Event Date:</strong>
+                        <span>${formatDate(event.event_date)}</span>
                     </div>
                     <!-- Show event segments if available -->
                     ${segments.length > 0 ? `

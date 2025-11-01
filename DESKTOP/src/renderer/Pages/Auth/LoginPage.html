@@ -7,7 +7,7 @@
         <link rel="stylesheet" href="../Auth/LoginPage.css">
         <link rel="stylesheet" href="../../components/Sidebar.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        
     </head>
     <body>
         <main class="admin-container">
@@ -56,7 +56,23 @@
                 </div>
             </div>
         </main>
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
         <script src="../../Pages/Auth/Auth.js"></script>
+        <script>
+        // Run after DOM is ready, giving Auth.js time to initialize Supabase
+        window.addEventListener("DOMContentLoaded", () => {
+            console.log("✅ Initializing Supabase client from preload config...");
+
+            setTimeout(() => {
+            if (window.supabase && window.supabase.auth) {
+                console.log("✅ Supabase client is ready:", window.supabase);
+            } else {
+                console.error("❌ Supabase client missing — check preload.js exposure or Auth.js init");
+                alert("Error initializing Supabase. Please restart the app.");
+            }
+            }, 200); // small delay ensures preload/Auth.js both done
+        });
+        </script>
         <script src="../../Pages/Auth/passToggle.js"></script>
     </body>
 </html>

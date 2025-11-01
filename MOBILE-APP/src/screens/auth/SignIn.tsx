@@ -47,6 +47,54 @@ const SignIn = () => {
     Keyboard.dismiss();
   };
 
+  const clearStorage = async () => {
+    Alert.alert(
+      "Clear Storage",
+      "This will clear all saved login data. Are you sure?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        { 
+          text: "Clear", 
+          onPress: async () => {
+            try {
+              // Clear SecureStore items
+              await SecureStore.deleteItemAsync('userToken');
+              await SecureStore.deleteItemAsync('userData');
+              
+              // If you're also using AsyncStorage, clear that too
+              // await AsyncStorage.clear();
+              
+              Alert.alert("Success", "Storage cleared successfully!");
+              console.log('✅ SecureStore cleared');
+            } catch (error) {
+              console.error('Error clearing storage:', error);
+              Alert.alert("Error", "Failed to clear storage");
+            }
+          } 
+        }
+      ]
+    );
+  };
+
+  const checkSecureStore = async () => {
+  try {
+    const token = await SecureStore.getItemAsync('userToken');
+    const userData = await SecureStore.getItemAsync('userData');
+    
+    console.log('🔐 SecureStore - Token exists:', !!token);
+    console.log('🔐 SecureStore - UserData exists:', !!userData);
+    
+    if (userData) {
+      console.log('📦 UserData:', JSON.parse(userData));
+    }
+  } catch (error) {
+    console.error('Error checking SecureStore:', error);
+  }
+  };
+
   const navigation = useNavigation<SignInScreenNavigationProp>();
   const { loadEventData, resetEventState, recoverEventData } = useEvent();
   const [email, setEmail] = useState('');
@@ -186,6 +234,16 @@ const SignIn = () => {
                 />
               </TouchableOpacity>
             </View>
+
+            {/* Clear Storage Button */}
+            <TouchableOpacity onPress={clearStorage}>
+              <Text>Clear Storage</Text>
+            </TouchableOpacity>
+
+            {/* Optional: Debug button */}
+            <TouchableOpacity onPress={checkSecureStore}>
+              <Text>Check Storage</Text>
+            </TouchableOpacity>
 
             {/* Remember Me Checkbox */}
             <View style={styles.rememberMeContainer}>

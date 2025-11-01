@@ -14,6 +14,22 @@
   <link rel="stylesheet" href="../Styles/ClientsPage.css">
   <link rel="stylesheet" href="../Styles/BudgetPage.css">
   <link rel="stylesheet" href="../Styles/GuestPage.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    console.log("✅ LandingPage initializing Supabase...");
+
+    if (window.supabaseConfig && window.supabaseConfig.isConfigured) {
+      console.log("✅ Creating Supabase client from preload config...");
+      window.supabase = supabase.createClient(
+        window.supabaseConfig.url,
+        window.supabaseConfig.anonKey
+      );
+      console.log("✅ Supabase client is ready:", window.supabase);
+    } else {
+      console.error("❌ Supabase config missing in LandingPage");
+      alert("Missing Supabase configuration. Please restart the app.");
+    }
+  </script>
 </head>
 <body data-page="LandingPage">
   <main class="page-content">

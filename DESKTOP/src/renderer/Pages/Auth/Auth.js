@@ -1,30 +1,42 @@
-// Auth.js - FIXED VERSION WITH RLS DISABLED
+function getSupabaseClient() {
+  // 1️⃣ Try preload-exposed client via electronAPI
+  if (window.electronAPI?.supabase) {
+    console.log("✅ Supabase client loaded via electronAPI");
+    return window.electronAPI.supabase;
+  }
 
-// ============================================
-// INITIALIZE SUPABASE CLIENT
-// ============================================
-const SUPABASE_URL = 'https://vxukqznjkdtuytnkhldu.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA';
+  // 2️⃣ Try direct global client (from HTML)
+  if (window.supabase && typeof window.supabase.auth?.signInWithPassword === "function") {
+    console.log("✅ Supabase client loaded via direct exposure");
+    return window.supabase;
+  }
 
-// Create Supabase client
-let supabase;
+  // 3️⃣ Create one using preload config if possible
+  if (window.supabaseConfig?.isConfigured && window.supabase?.createClient) {
+    console.log("✅ Creating Supabase client from preload config...");
+    const { createClient } = window.supabase;
+    const client = createClient(window.supabaseConfig.url, window.supabaseConfig.anonKey);
+    window.supabase = client; // make globally available
+    return client;
+  }
 
-if (typeof window.supabase !== 'undefined') {
-  console.log("Using window.supabase from CDN");
-  const { createClient } = window.supabase;
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-} else {
-  console.error("Supabase not loaded! Add CDN script to HTML");
-  alert("Error: Supabase library not loaded. Please refresh the page.");
+  console.error("❌ Supabase client not found — preload may not have exposed it.");
+  alert("Error: Supabase not available. Please restart the app.");
+  return null;
 }
 
-console.log("Auth.js loaded!");
-console.log("Supabase client:", supabase);
+// ✅ Always initialize using this unified function
+const supabase = getSupabaseClient();
+
+if (!supabase) {
+  throw new Error("Supabase client initialization failed");
+}
 
 // ============================================
 // DOM READY EVENT
 // ============================================
 document.addEventListener("DOMContentLoaded", () => {
+  const supabase = window.supabase;
   
   function showError(formId, message, focusId, type = "error") {
     const errorBox = document.querySelector(`#${formId} .errorBox`);

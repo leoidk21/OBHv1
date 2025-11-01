@@ -32,45 +32,49 @@ router.post('/signup', async (req, res) => {
     const { first_name, last_name, email, phone, password } = req.body;
 
     try {
-        // 1. Hash password first
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // 1. Check if email exists in admin_profiles first
+        const adminCheck = await pool.query(
+            'SELECT id FROM admin_profiles WHERE email = $1',
+            [email]
+        );
 
-        // 2. Create user in Supabase
-        const { data: supabaseData, error: supabaseError } = await supabase.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true, // Auto-confirm for mobile
-            user_metadata: {
-                first_name,
-                last_name,
-                phone
-            }
-        });
-
-        if (supabaseError) {
-            console.error('Supabase error:', supabaseError);
-            return res.status(400).json({ error: supabaseError.message });
+        if (adminCheck.rows.length > 0) {
+            return res.status(400).json({ 
+                error: 'This email is reserved for admin accounts. Please use a different email.' 
+            });
         }
 
-        const supabaseUser = supabaseData.user;
+        // 2. Check if email already exists in mobile_users
+        const existingUser = await pool.query(
+            'SELECT id FROM mobile_users WHERE email = $1',
+            [email]
+        );
 
-        // 3. Create user in your database with Supabase UUID
+        if (existingUser.rows.length > 0) {
+            return res.status(400).json({ 
+                error: 'Email already registered. Please use a different email or login.' 
+            });
+        }
+
+        // 3. Hash password and create user
+        const hashedPassword = await bcrypt.hash(password, 10);
+
         const newUser = await pool.query(
-            `INSERT INTO mobile_users (first_name, last_name, email, phone, password, supabase_uuid)
-            VALUES ($1, $2, $3, $4, $5, $6) 
-            RETURNING id, first_name, last_name, email, phone, role, supabase_uuid`,
-            [first_name, last_name, email, phone, hashedPassword, supabaseUser.id]
+            `INSERT INTO mobile_users (first_name, last_name, email, phone, password)
+            VALUES ($1, $2, $3, $4, $5) 
+            RETURNING id, first_name, last_name, email, phone, role, created_at`,
+            [first_name, last_name, email, phone, hashedPassword]
         );
 
         const user = newUser.rows[0];
 
-        // 4. Generate your JWT token
+        // 4. Generate JWT token with type: 'mobile'
         const token = jwt.sign(
             { 
-                id: user.id, 
-                supabase_uuid: user.supabase_uuid,
+                id: user.id,
                 email: user.email, 
-                role: user.role 
+                role: user.role,
+                type: 'mobile'  // ADD THIS LINE
             },
             process.env.JWT_SECRET,
             { 
@@ -78,21 +82,28 @@ router.post('/signup', async (req, res) => {
             }
         );
 
-        // 5. Return token and user data
         res.json({
             token,
             user: {
                 id: user.id,
-                supabase_uuid: user.supabase_uuid,
                 first_name: user.first_name,
                 last_name: user.last_name,
                 email: user.email,
+                phone: user.phone,
                 role: user.role
             }
         });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Signup error:', err.message);
+        
+        // Handle database trigger exception
+        if (err.message.includes('EMAIL_RESERVED_FOR_ADMIN')) {
+            return res.status(400).json({ 
+                error: 'This email is reserved for admin accounts. Please use a different email.' 
+            });
+        }
+        
+        res.status(500).json({ error: 'Server error during signup' });
     }
 });
 
@@ -100,43 +111,52 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     try {
+        // 1. First check if this is an admin email
+        const adminCheck = await pool.query(
+            'SELECT id FROM admin_profiles WHERE email = $1',
+            [email]
+        );
+
+        if (adminCheck.rows.length > 0) {
+            return res.status(401).json({ 
+                error: 'Admin accounts cannot login through mobile app. Please use the admin portal.' 
+            });
+        }
+
+        // 2. Check mobile_users table
         const result = await pool.query(
             'SELECT * FROM mobile_users WHERE email = $1',
             [email]
         );
 
-        // validation
         if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'Invalid email or password' });
         }
 
         const user = result.rows[0];
 
-        // compare password
+        // 3. Compare password
         const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'Invalid email or password' });
         }
 
-        // generate token
+        // 4. Generate token with type: 'mobile'
         const token = jwt.sign(
             { 
-                id: user.id, 
-                supabase_uuid: user.supabase_uuid, // Include if exists
+                id: user.id,
                 email: user.email, 
-                role: user.role 
+                role: user.role,
+                type: 'mobile'  // ADD THIS LINE
             },
             process.env.JWT_SECRET,
             { expiresIn: '12h' }
         );
 
-        console.log('User object:', user);
-
         res.json({ 
             token, 
             user: { 
                 id: user.id,
-                supabase_uuid: user.supabase_uuid,
                 first_name: user.first_name, 
                 last_name: user.last_name,
                 email: user.email, 
@@ -152,26 +172,14 @@ router.post('/login', async (req, res) => {
 
 router.get('/user-data', authenticateToken, async (req, res) => {
     try {
-        let user;
-        
-        // If user has supabase_uuid (new system)
-        if (req.user.supabase_uuid) {
-            const result = await pool.query(
-                `SELECT id, first_name, last_name, email, phone, role, supabase_uuid
-                 FROM mobile_users WHERE supabase_uuid = $1`,
-                [req.user.supabase_uuid]
-            );
-            user = result.rows[0];
-        } 
-        // Fallback to numeric ID (old system)
-        else {
-            const result = await pool.query(
-                `SELECT id, first_name, last_name, email, phone, role
-                 FROM mobile_users WHERE id = $1`,
-                [req.user.id]
-            );
-            user = result.rows[0];
-        }
+        // Since we removed supabase_uuid, always use the numeric ID
+        const result = await pool.query(
+            `SELECT id, first_name, last_name, email, phone, role
+             FROM mobile_users WHERE id = $1`,
+            [req.user.id]
+        );
+
+        const user = result.rows[0];
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });

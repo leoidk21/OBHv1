@@ -7,6 +7,23 @@
     <link rel="stylesheet" href="../Auth/SignUp.css">
     <link rel="stylesheet" href="../../components/Sidebar.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        console.log("🔧 Initializing Supabase...");
+        
+        if (window.supabaseConfig && window.supabaseConfig.isConfigured) {
+            const { createClient } = supabase;
+            window.supabase = createClient(
+                window.supabaseConfig.url,
+                window.supabaseConfig.anonKey
+            );
+            console.log("✅ Supabase client created successfully");
+        } else {
+            console.error("❌ Supabase config missing");
+            window.addEventListener('DOMContentLoaded', () => {
+                alert("Error: Supabase client not available. Please restart the app.");
+            });
+        }
+    </script>
     <script src="../Auth/Auth.js"></script>
 </head>
 <body>

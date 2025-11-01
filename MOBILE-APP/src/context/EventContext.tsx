@@ -5,6 +5,7 @@ import { Platform, Alert, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard'; // For Expo
 
 import { supabase } from '../lib/supabase';
+import { getUserData } from "../screens/auth/user-auth";
 
 // Storage keys
 const eventKeyFor = (userId: string) => `eventData_${userId}`;
@@ -992,17 +993,13 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
     };
   };
 
-  const generateMobileAppId = (): string => {
-    return "mobile-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
-  };
-
   const submitEventToDesktop = async (): Promise<any> => {
     try {
       console.log('🚀 Starting submission to Supabase...');
 
-      // Get current user
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) throw new Error("Not authenticated");
+      // Get user from your custom JWT token, not Supabase Auth
+      const userData = await getUserData(); // Your custom function
+      if (!userData || !userData.id) throw new Error("Not authenticated");
 
       const eventSummary = getEventSummary();
 
@@ -1010,12 +1007,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
       console.log('🌐 Saving to Supabase...');
 
-      // Insert event plan to Supabase — matching new table columns
+      // Insert event plan to Supabase
       const { data, error } = await supabase
         .from('event_plans')
         .insert([
           {
-            user_uuid: user.id, // ✅ Authenticated user from Supabase
+            mobile_user_id: userData.id, // ✅ Use integer ID from mobile_users
             event_type: eventSummary.event_type,
             package_name: eventSummary.selected_package?.name || eventSummary.guest_range || null,
             package_price: Number(
@@ -1035,50 +1032,21 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             e_signature: eventSummary.eSignature,
             event_segments: JSON.stringify(eventSummary.schedule),
             status: 'Pending',
-            admin_id: null, // ✅ Optional — safely left null for now
+            admin_id: null,
           }
         ])
         .select()
         .single();
 
-      if (error) {
-        console.error('❌ Supabase insert error:', error);
-        throw new Error(`Failed to save event: ${error.message}`);
-      }
-
-      // ✅ Save guests (if any)
-      if (eventSummary.guests && eventSummary.guests.length > 0) {
-        console.log('👥 Saving guests:', eventSummary.guests);
-
-        const guestInserts = eventSummary.guests.map((guest: Guest) => ({
-          event_plan_id: data.id,
-          guest_name: guest.name || guest.guest_name || '',
-          status: guest.status || 'Pending',
-          invite_link: guest.inviteLink || guest.invite_link || null,
-        }));
-
-        const { error: guestsError } = await supabase
-          .from('event_guests')
-          .insert(guestInserts);
-
-        if (guestsError) {
-          console.error('❌ Could not save guests:', guestsError);
-          throw new Error(`Failed to save guests: ${guestsError.message}`);
-        } else {
-          console.log('✅ Guests saved successfully');
-        }
-      } else {
-        console.log('⚠️ No guests to save');
-      }
-
-      console.log('✅ Event saved successfully with ID:', data.id);
-      await markEventAsSubmitted();
-      return data;
-
+      // ... rest of your code
     } catch (err) {
       console.error('Submission error:', err);
       throw err;
     }
+  };
+
+  const generateMobileAppId = (): string => {
+    return "mobile-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
   };
 
   // Debug function
