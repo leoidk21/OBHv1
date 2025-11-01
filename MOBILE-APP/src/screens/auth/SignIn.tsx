@@ -129,8 +129,15 @@ const SignIn = () => {
 
   const handleSignIn = async () => {
     setLoading(true);
+    
     try {
-      const { user, session } = await signInWithEmail(email, password);
+      // Use the login function from user-auth.js (not signInWithEmail)
+      const { user, session } = await login(email.trim(), password.trim());
+      
+      if (!user) {
+        throw new Error('Login failed - no user returned');
+      }
+      
       console.log('Logging in as:', user.id);
 
       // Always store the token securely
@@ -158,8 +165,15 @@ const SignIn = () => {
       }
 
       navigation.navigate('Home');
+      
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Invalid email or password");
+      console.error('Login error:', err);
+      
+      // Check for specific error messages
+      const errorMessage = err.message || err.error?.message || "Invalid email or password";
+      
+      // Show the error in an alert
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -235,15 +249,13 @@ const SignIn = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Clear Storage Button */}
-            <TouchableOpacity onPress={clearStorage}>
+            {/* <TouchableOpacity onPress={clearStorage}>
               <Text>Clear Storage</Text>
             </TouchableOpacity>
 
-            {/* Optional: Debug button */}
             <TouchableOpacity onPress={checkSecureStore}>
               <Text>Check Storage</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* Remember Me Checkbox */}
             <View style={styles.rememberMeContainer}>

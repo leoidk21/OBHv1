@@ -1,38 +1,66 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../../db');
+const supabase = require('../../supabase');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Basic token authentication
-function authenticateToken(req, res, next) {
+// Enhanced token authentication with role fetching
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
 
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  try {
+    // ✅ Validate Supabase token
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(403).json({ error: 'Invalid or expired Supabase token' });
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = user;
+
+    // ✅ Fetch the admin profile and role
+    const { data: profile, error: profileError } = await supabase
+      .from('admin_profiles')
+      .select('role, status, id, first_name, last_name, email')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return res.status(403).json({ error: 'User profile not found' });
     }
-    req.user = decoded;
+
+    req.user.role = profile.role;
+    req.user.status = profile.status;
+
     next();
-  });
+  } catch (err) {
+    console.error('Auth error:', err.message);
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
 }
 
-// Verify user is Super Admin
+// Updated role verification (support both naming conventions)
 function requireSuperAdmin(req, res, next) {
-  if (req.user.role !== 'super_admin') {
-    return res.status(403).json({ error: 'Access denied. Super Admin privileges required.' });
+  const userRole = req.user.role?.toLowerCase();
+  if (!['superadmin', 'super_admin'].includes(userRole)) {
+    return res.status(403).json({ 
+      error: 'Access denied. Super Admin privileges required.',
+      userRole: userRole,
+      required: 'superadmin or super_admin'
+    });
   }
   next();
 }
 
-// Verify user is Admin or Super Admin
 function requireAdmin(req, res, next) {
-  if (!['admin', 'super_admin'].includes(req.user.role)) {
-    return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+  const userRole = req.user.role?.toLowerCase();
+  const allowedRoles = ['admin', 'superadmin', 'super_admin'];
+  
+  if (!allowedRoles.includes(userRole)) {
+    return res.status(403).json({ 
+      error: 'Access denied. Admin privileges required.',
+      userRole: userRole,
+      required: 'admin, superadmin, or super_admin'
+    });
   }
   next();
 }

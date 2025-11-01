@@ -12,6 +12,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// GET /api/superadmin/logs - Get admin logs
 router.get('/logs', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 50, admin_id, target_page, action, date_from, date_to } = req.query;
@@ -27,7 +28,7 @@ router.get('/logs', authenticateToken, requireSuperAdmin, async (req, res) => {
         details,
         ip_address,
         timestamp,
-        admins (
+        admin_profiles (
           first_name,
           last_name,
           email,
@@ -67,62 +68,80 @@ router.get('/logs', authenticateToken, requireSuperAdmin, async (req, res) => {
   }
 });
 
-// GET /api/superadmin/logs/summary - Get activity summary
+// GET /api/superadmin/logs/summary - Get activity summary (FIXED)
 router.get('/logs/summary', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
 
-    let dateFilter = '';
-    let queryParams = [];
+    // ⚠️ FIXED: Use Supabase consistently instead of pool
+    let query = supabase
+      .from('admin_logs')
+      .select('*', { count: 'exact' });
 
+    // Apply date filters if provided
     if (date_from && date_to) {
-      dateFilter = 'WHERE timestamp BETWEEN $1 AND $2';
-      queryParams = [date_from, date_to];
+      query = query.gte('timestamp', date_from).lte('timestamp', date_to);
     }
 
-    // Get actions by page
-    const pageStats = await pool.query(
-      `SELECT target_page, COUNT(*) as count
-       FROM admin_logs
-       ${dateFilter}
-       GROUP BY target_page
-       ORDER BY count DESC`,
-      queryParams
-    );
+    const { data: logs, error, count } = await query;
 
-    // Get actions by admin
-    const adminStats = await pool.query(
-      `SELECT 
-        a.id,
-        a.first_name,
-        a.last_name,
-        a.email,
-        COUNT(al.id) as action_count
-       FROM admins a
-       LEFT JOIN admin_logs al ON a.id = al.admin_id
-       ${dateFilter ? 'AND al.timestamp BETWEEN $1 AND $2' : ''}
-       GROUP BY a.id, a.first_name, a.last_name, a.email
-       ORDER BY action_count DESC`,
-      queryParams
-    );
+    if (error) throw error;
 
-    // Get recent actions
-    const recentActions = await pool.query(
-      `SELECT action, COUNT(*) as count
-       FROM admin_logs
-       ${dateFilter}
-       GROUP BY action
-       ORDER BY count DESC
-       LIMIT 10`,
-      queryParams
-    );
+    // Calculate summary data
+    const byPage = {};
+    const byAdmin = {};
+    const topActions = {};
+
+    logs.forEach(log => {
+      // Count by page
+      byPage[log.target_page] = (byPage[log.target_page] || 0) + 1;
+      
+      // Count by admin
+      byAdmin[log.admin_id] = (byAdmin[log.admin_id] || 0) + 1;
+      
+      // Count actions
+      topActions[log.action] = (topActions[log.action] || 0) + 1;
+    });
+
+    // Convert to arrays and sort
+    const byPageArray = Object.entries(byPage)
+      .map(([target_page, count]) => ({ target_page, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const topActionsArray = Object.entries(topActions)
+      .map(([action, count]) => ({ action, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Get admin details for byAdmin summary
+    const adminDetails = [];
+    for (const [adminId, action_count] of Object.entries(byAdmin)) {
+      const { data: admin } = await supabase
+        .from('admin_profiles')
+        .select('id, first_name, last_name, email')
+        .eq('id', adminId)
+        .single();
+      
+      if (admin) {
+        adminDetails.push({
+          id: admin.id,
+          first_name: admin.first_name,
+          last_name: admin.last_name,
+          email: admin.email,
+          action_count
+        });
+      }
+    }
+
+    adminDetails.sort((a, b) => b.action_count - a.action_count);
 
     res.json({
       success: true,
       summary: {
-        byPage: pageStats.rows,
-        byAdmin: adminStats.rows,
-        topActions: recentActions.rows
+        byPage: byPageArray,
+        byAdmin: adminDetails,
+        topActions: topActionsArray,
+        totalLogs: count
       }
     });
   } catch (err) {
@@ -135,7 +154,7 @@ router.get('/logs/summary', authenticateToken, requireSuperAdmin, async (req, re
 router.get('/admins', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('admins')
+      .from('admin_profiles')
       .select('id, first_name, last_name, email, phone, role, status, created_at')
       .neq('id', req.user.id)
       .order('status', { ascending: true })
@@ -168,7 +187,7 @@ router.put('/admins/:id/approve', authenticateToken, requireSuperAdmin, async (r
     console.log(`Approval request: Admin ${id}, Decision: ${decision}, Status: ${status}`);
 
     const { data, error } = await supabase
-      .from('admins')
+      .from('admin_profiles')
       .update({
         status: status,
         approved_by: req.user.id,
@@ -184,8 +203,6 @@ router.put('/admins/:id/approve', authenticateToken, requireSuperAdmin, async (r
     const admin = data[0];
     console.log(`Successfully updated admin ${admin.email} to status: ${admin.status}`);
 
-    // Email sending logic here...
-
     res.json({ 
       success: true, 
       admin,
@@ -197,31 +214,30 @@ router.put('/admins/:id/approve', authenticateToken, requireSuperAdmin, async (r
   }
 });
 
-// PUT /api/superadmin/admins/:id/role - Update admin role
+// PUT /api/superadmin/admins/:id/role - Update admin role (FIXED)
 router.put('/admins/:id/role', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
     
-    if (!['admin', 'super_admin'].includes(role)) {
+    if (!['admin', 'superadmin'].includes(role)) {
       return res.status(400).json({ error: "Invalid role" });
     }
 
-    const result = await pool.query(
-      `UPDATE admins 
-       SET role = $1 
-       WHERE id = $2
-       RETURNING id, first_name, last_name, email, role`,
-      [role, id]
-    );
+    // ⚠️ FIXED: Use Supabase instead of pool
+    const { data, error } = await supabase
+      .from('admin_profiles')
+      .update({ role: role })
+      .eq('id', id)
+      .select('id, first_name, last_name, email, role');
 
-    if (result.rows.length === 0) {
+    if (error || !data || data.length === 0) {
       return res.status(404).json({ error: "Admin not found" });
     }
 
     res.json({
       success: true,
-      admin: result.rows[0]
+      admin: data[0]
     });
   } catch (err) {
     console.error("Update role error:", err.message);
@@ -229,7 +245,7 @@ router.put('/admins/:id/role', authenticateToken, requireSuperAdmin, async (req,
   }
 });
 
-// DELETE /api/superadmin/admins/:id - Delete admin (super admin only)
+// DELETE /api/superadmin/admins/:id - Delete admin (FIXED)
 router.delete('/admins/:id', authenticateToken, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -238,12 +254,14 @@ router.delete('/admins/:id', authenticateToken, requireSuperAdmin, async (req, r
       return res.status(400).json({ error: "Cannot delete your own account" });
     }
 
-    const result = await pool.query(
-      `DELETE FROM admins WHERE id = $1 RETURNING id`,
-      [id]
-    );
+    // ⚠️ FIXED: Use Supabase instead of pool
+    const { data, error } = await supabase
+      .from('admin_profiles')
+      .delete()
+      .eq('id', id)
+      .select('id');
 
-    if (result.rows.length === 0) {
+    if (error || !data || data.length === 0) {
       return res.status(404).json({ error: "Admin not found" });
     }
 
@@ -257,5 +275,19 @@ router.delete('/admins/:id', authenticateToken, requireSuperAdmin, async (req, r
   }
 });
 
+// ADD THIS DEBUG ENDPOINT TO TEST AUTH
+router.get('/debug-auth', authenticateToken, requireSuperAdmin, async (req, res) => {
+  res.json({
+    success: true,
+    message: "Super Admin access confirmed!",
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      status: req.user.status
+    },
+    timestamp: new Date().toISOString()
+  });
+});
 
 module.exports = router;

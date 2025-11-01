@@ -1,5 +1,5 @@
 const express = require('express');
-const pool = require('../db');
+const supabase = require('../supabase');
 const { authenticateToken, requireAdmin, auditLog, logAction } = require('./middleware/super-admin-auth');
 const router = express.Router();
 
@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('admins')
+      .from('admin_profiles')
       .select('id, first_name, last_name, email, phone, role, status')
       .eq('id', req.user.id)
       .single();
@@ -30,7 +30,7 @@ router.put("/me", authenticateToken, async (req, res) => {
     const { first_name, last_name, email, phone } = req.body;
 
     const { data, error } = await supabase
-      .from('admins')
+      .from('admin_profiles')
       .update({ first_name, last_name, email, phone })
       .eq('id', adminId)
       .select();

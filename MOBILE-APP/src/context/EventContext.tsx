@@ -1007,12 +1007,14 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
 
       console.log('🌐 Saving to Supabase...');
 
-      // Insert event plan to Supabase
-      const { data, error } = await supabase
+      // Step 1: Insert event into event_plans
+      const { data: eventData, error: eventError } = await supabase
         .from('event_plans')
         .insert([
           {
-            mobile_user_id: userData.id, // ✅ Use integer ID from mobile_users
+            mobile_user_id: userData.id,
+            user_uuid: userData.auth_id,
+            auth_uid: userData.auth_id, 
             event_type: eventSummary.event_type,
             package_name: eventSummary.selected_package?.name || eventSummary.guest_range || null,
             package_price: Number(
@@ -1025,12 +1027,12 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
             client_first_name: eventSummary.client_first_name || null,
             client_last_name: eventSummary.client_last_name || null,
             event_date: eventSummary.event_date,
-            guest_count: eventSummary.totalGuests || eventSummary.guest_range,
+            guest_count: eventSummary.totalGuests || null,
             guest_range: eventSummary.guest_range || null,
-            expenses: eventSummary.budget,
+            expenses: eventSummary.budget, // This is JSONB in database
             category: eventSummary.event_type,
             e_signature: eventSummary.eSignature,
-            event_segments: JSON.stringify(eventSummary.schedule),
+            event_segments: eventSummary.schedule ? JSON.stringify(eventSummary.schedule) : null,
             status: 'Pending',
             admin_id: null,
           }
@@ -1038,9 +1040,63 @@ export const EventProvider: React.FC<EventProviderProps> = ({ children }) => {
         .select()
         .single();
 
-      // ... rest of your code
+      if (eventError) {
+        console.error('❌ Error inserting event:', eventError);
+        throw eventError;
+      }
+
+      if (!eventData || !eventData.id) {
+        throw new Error('Event created but no ID returned');
+      }
+
+      console.log('✅ Event inserted successfully with ID:', eventData.id);
+
+      // Step 2: Insert guests into event_guests table
+      const guests = eventSummary.guests || [];
+      
+      if (guests.length > 0) {
+        console.log(`👥 Inserting ${guests.length} guests...`);
+        
+        const guestsToInsert = guests.map((guest: Guest) => ({
+          event_plan_id: eventData.id,
+          guest_name: guest.name,
+          status: guest.status || 'Pending',
+          mobile_guest_id: guest.id, // Store the mobile app's guest ID
+          invite_link: guest.inviteLink || null,
+          invite_token: null, // Will be generated when creating invite link
+        }));
+
+        const { data: insertedGuests, error: guestsError } = await supabase
+          .from('event_guests')
+          .insert(guestsToInsert)
+          .select();
+
+        if (guestsError) {
+          console.error('❌ Error inserting guests:', guestsError);
+          // Don't throw here - event is already created
+          // Log the error but continue
+          console.warn('⚠️ Event created but guests failed to insert');
+        } else {
+          console.log(`✅ Successfully inserted ${insertedGuests?.length || 0} guests`);
+        }
+      } else {
+        console.log('ℹ️ No guests to insert');
+      }
+
+      // Mark as submitted
+      await markEventAsSubmitted();
+      
+      console.log('✅ Event and guests submitted successfully');
+      
+      return {
+        success: true,
+        eventId: eventData.id,
+        eventData: eventData,
+        guestsCount: guests.length
+      };
+
     } catch (err) {
-      console.error('Submission error:', err);
+      console.error('❌ Submission error:', err);
       throw err;
     }
   };

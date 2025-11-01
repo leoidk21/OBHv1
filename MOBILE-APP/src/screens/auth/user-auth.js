@@ -10,10 +10,9 @@ export const storeToken = async (token) => {
     }
 };
 
-// Store User Data - Improved version
+// Store User Data
 export const storeUserData = async (userData) => {
     try {
-        // Validate userData structure
         if (!userData || typeof userData !== 'object') {
             console.error('Invalid user data format');
             return;
@@ -32,16 +31,27 @@ export const fetchUserData = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user) {
-            const userData = {
-                id: user.id,
-                email: user.email,
-                first_name: user.user_metadata?.first_name,
-                last_name: user.user_metadata?.last_name,
-            };
-            
-            console.log('🔄 FRESH DATA:', userData);
-            await SecureStore.setItemAsync('userData', JSON.stringify(userData));
-            return userData;
+            // Check if user is in mobile_users table
+            const { data: mobileUser } = await supabase
+                .from('mobile_users')
+                .select('*')
+                .eq('email', user.email)
+                .single();
+
+            if (mobileUser) {
+                const userData = {
+                    id: mobileUser.id,
+                    auth_id: user.id,
+                    email: user.email,
+                    first_name: mobileUser.first_name,
+                    last_name: mobileUser.last_name,
+                    role: 'mobile_user'
+                };
+                
+                console.log('🔄 FRESH MOBILE USER DATA:', userData);
+                await SecureStore.setItemAsync('userData', JSON.stringify(userData));
+                return userData;
+            }
         }
         return null;
     } catch (error) {
@@ -50,7 +60,6 @@ export const fetchUserData = async () => {
     }
 };
 
-// Get User Data - Improved version
 export const getUserData = async () => {
     try {
         const userDataString = await SecureStore.getItemAsync('userData');
@@ -68,7 +77,6 @@ export const getUserData = async () => {
     }
 };
 
-// Get stored token
 export const getToken = async () => {
     try {
         const token = await SecureStore.getItemAsync('userToken');
@@ -79,7 +87,6 @@ export const getToken = async () => {
     }
 };
 
-// Remove token (logout)
 export const logout = async () => {
     try {
         await SecureStore.deleteItemAsync('userToken');
@@ -90,7 +97,6 @@ export const logout = async () => {
     }
 };
 
-// Check if user is logged in
 export const isLoggedIn = async () => {
     const token = await getToken();
     return token !== null;
@@ -98,65 +104,129 @@ export const isLoggedIn = async () => {
 
 // ---------------- AUTH CALLS USING SUPABASE ---------------- //
 
-// SIGNUP with Supabase
+// SIGNUP - Mobile users only
 export const signup = async (firstName, lastName, email, password) => {
     console.log('user-auth.js: signUp called');
     try {
         // Clear any old cached data
         await SecureStore.deleteItemAsync('userData');
         
-        const res = await axios.post(`${API_BASE}/signup`, {
-            first_name: firstName,
-            last_name: lastName,
+        // Check if email is already used by an admin
+        const { data: adminCheck } = await supabase
+            .from('admin_profiles')
+            .select('id')
+            .eq('email', email)
+            .single();
+
+        if (adminCheck) {
+            throw new Error('This email is registered as an admin. Please use a different email for the mobile app.');
+        }
+
+        // Create auth user
+        const { data: authData, error: authError } = await supabase.auth.signUp({
             email,
-            password
+            password,
+            options: {
+                data: {
+                    first_name: firstName,
+                    last_name: lastName,
+                }
+            }
         });
 
-        console.log('Signup response:', res.data);
+        if (authError) throw authError;
 
-        if (res.data.token) await storeToken(res.data.token);
-        if (res.data.user) await storeUserData(res.data.user);
+        // Create mobile user record
+        const { data: mobileUser, error: mobileError } = await supabase
+            .from('mobile_users')
+            .insert([{
+                first_name: firstName,
+                last_name: lastName,
+                email: email,
+                role: 'user'
+            }])
+            .select()
+            .single();
 
-        // Force fetch fresh data
-        await fetchUserData();
-        
-        return res.data;
+        if (mobileError) {
+            console.error('Error creating mobile user:', mobileError);
+            throw mobileError;
+        }
+
+        const userData = {
+            id: mobileUser.id,
+            auth_id: authData.user.id,
+            email: email,
+            first_name: firstName,
+            last_name: lastName,
+            role: 'mobile_user'
+        };
+
+        await storeUserData(userData);
+        await storeToken(authData.session?.access_token);
+
+        return { user: userData, session: authData.session };
     } catch (error) {
         console.error('Signup error:', error);
-        throw error.response ? error.response.data : { error: 'Server error' };
+        throw error;
     }
 };
 
-
-// LOGIN with Supabase
+// LOGIN - Mobile users only
 export const login = async (email, password) => {
     console.log('user-auth.js: login called');
     try {
         // Clear any old cached data first
         await SecureStore.deleteItemAsync('userData');
         
-        const res = await axios.post(`${API_BASE}/login`, { email, password });
-        console.log('Login response data:', res.data);
+        // Check if this email belongs to an admin
+        const { data: adminCheck } = await supabase
+            .from('admin_profiles')
+            .select('id, role')
+            .eq('email', email)
+            .single();
 
-        if (res.data.token) {
-            await storeToken(res.data.token);
-        }
-        
-        if (res.data.user) {
-            console.log('Storing user data from login:', res.data.user);
-            await storeUserData(res.data.user);
+        if (adminCheck) {
+            throw new Error('Admin accounts cannot log in to the mobile app. Please use different account.');
         }
 
-        // Force fetch fresh data from backend to ensure it's correct
-        await fetchUserData();
-        
-        return res.data;
+        // Sign in with Supabase
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (authError) throw authError;
+
+        // Get mobile user data
+        const { data: mobileUser, error: mobileError } = await supabase
+            .from('mobile_users')
+            .select('*')
+            .eq('email', email)
+            .single();
+
+        if (mobileError) {
+            throw new Error('Mobile user account not found. Please sign up first.');
+        }
+
+        const userData = {
+            id: mobileUser.id,
+            auth_id: authData.user.id,
+            email: email,
+            first_name: mobileUser.first_name,
+            last_name: mobileUser.last_name,
+            role: 'mobile_user'
+        };
+
+        await storeUserData(userData);
+        await storeToken(authData.session?.access_token);
+
+        return { user: userData, session: authData.session };
     } catch (error) {
         console.error('Login error:', error);
-        throw error.response ? error.response.data : { error: 'Server error' };
+        throw error;
     }
 };
-
 
 // Get current user from Supabase
 export const getCurrentUser = async () => {
@@ -169,16 +239,26 @@ export const getCurrentUser = async () => {
         }
 
         if (user) {
-            const userData = {
-                id: user.id,
-                email: user.email,
-                first_name: user.user_metadata?.first_name,
-                last_name: user.user_metadata?.last_name,
-            };
-            
-            // Update stored data
-            await storeUserData(userData);
-            return userData;
+            // Get mobile user data
+            const { data: mobileUser } = await supabase
+                .from('mobile_users')
+                .select('*')
+                .eq('email', user.email)
+                .single();
+
+            if (mobileUser) {
+                const userData = {
+                    id: mobileUser.id,
+                    auth_id: user.id,
+                    email: user.email,
+                    first_name: mobileUser.first_name,
+                    last_name: mobileUser.last_name,
+                    role: 'mobile_user'
+                };
+                
+                await storeUserData(userData);
+                return userData;
+            }
         }
         
         return null;
@@ -191,7 +271,8 @@ export const getCurrentUser = async () => {
 // Update user profile with Supabase
 export const updateProfile = async (firstName, lastName, email) => {
     try {
-        const { data, error } = await supabase.auth.updateUser({
+        // Update auth user
+        const { data: authData, error: authError } = await supabase.auth.updateUser({
             email: email,
             data: {
                 first_name: firstName,
@@ -199,25 +280,33 @@ export const updateProfile = async (firstName, lastName, email) => {
             }
         });
 
-        if (error) {
-            console.error('Supabase update profile error:', error);
-            throw error;
-        }
+        if (authError) throw authError;
 
-        console.log('Supabase profile update response:', data);
+        // Update mobile_users table
+        const { data: mobileData, error: mobileError } = await supabase
+            .from('mobile_users')
+            .update({
+                first_name: firstName,
+                last_name: lastName,
+                email: email
+            })
+            .eq('email', authData.user.email)
+            .select()
+            .single();
 
-        if (data.user) {
-            const userData = {
-                id: data.user.id,
-                email: data.user.email,
-                first_name: data.user.user_metadata?.first_name,
-                last_name: data.user.user_metadata?.last_name,
-            };
-            
-            await storeUserData(userData);
-        }
+        if (mobileError) throw mobileError;
 
-        return data;
+        const userData = {
+            id: mobileData.id,
+            auth_id: authData.user.id,
+            email: email,
+            first_name: firstName,
+            last_name: lastName,
+            role: 'mobile_user'
+        };
+        
+        await storeUserData(userData);
+        return { user: userData };
     } catch (error) {
         console.error('Update profile error:', error);
         throw error;
@@ -235,6 +324,7 @@ export const resetPassword = async (email) => {
         throw error;
     }
 };
+
 // Check Supabase session
 export const checkAuthSession = async () => {
     try {

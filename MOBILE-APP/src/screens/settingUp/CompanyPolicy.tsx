@@ -107,46 +107,47 @@ const CompanyPolicy = () => {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('✅ CONFIRMING AND NAVIGATING');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      
-      // Check data one more time before navigation
+
       const userId = await SecureStore.getItemAsync("userId");
       console.log('👤 UserId:', userId);
-      
+
       console.log('📝 Memory keys:', Object.keys(eventData));
       console.log('📝 Client:', eventData.client_name);
-      
-      if (userId) {
-        const stored = await AsyncStorage.getItem(`eventData_${userId}`);
-        console.log('💾 Storage exists:', !!stored);
-        
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          console.log('💾 Stored keys:', Object.keys(parsed));
-          console.log('💾 Stored client:', parsed.client_name);
-        } else {
-          console.error('❌ NO DATA IN STORAGE BEFORE NAVIGATION!');
-          Alert.alert('Warning', 'Data not saved properly. Please try again.');
-          return;
-        }
-      }
-      
-      // Validate required fields
-      if (!eventData.client_name || !eventData.event_date) {
-        Alert.alert('Error', 'Missing required information');
+
+      if (!userId) {
+        Alert.alert('Error', 'User ID missing. Please log in again.');
         return;
       }
 
+      // ✅ Check and fix missing storage
+      let stored = await AsyncStorage.getItem(`eventData_${userId}`);
+      if (!stored) {
+        console.warn('⚠️ No stored data found — saving now...');
+        await AsyncStorage.setItem(`eventData_${userId}`, JSON.stringify(eventData));
+        stored = JSON.stringify(eventData);
+        console.log('💾 Data saved successfully to AsyncStorage!');
+      } else {
+        console.log('💾 Storage already exists');
+      }
+
+      // Validate essential fields
+      if (!eventData.client_name || !eventData.event_date) {
+        Alert.alert('Error', 'Missing required event details.');
+        return;
+      }
+
+      // Save to Supabase or backend
       await debugStorageKeys();
       await saveEventToBackend();
 
       console.log('🚀 Navigating to Home...');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-      
+
       setShowReviewModal(false);
       navigation.navigate("Home");
-      
+
     } catch (error) {
-      console.error('❌ Error:', error);
+      console.error('❌ Error in handleConfirmAndContinue:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };

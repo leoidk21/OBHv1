@@ -98,17 +98,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       try {
-        // Step 1: Create auth user
+        // Step 1: Create user in Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: payload.email,
           password: payload.password,
-          options: {
-            data: {
-              first_name: payload.firstName,
-              last_name: payload.lastName,
-              phone: payload.phone
-            }
-          }
         });
 
         console.log("Signup response:", { authData, authError });
@@ -126,23 +119,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         console.log("Auth user created:", authData.user.id);
 
-        // Step 2: Create admin profile (RLS is disabled, so this should work)
-        const { data: profileData, error: profileError } = await supabase
-          .from('admin_profiles')
-          .insert({
-            id: authData.user.id,
-            first_name: payload.firstName,
-            last_name: payload.lastName,
-            phone: payload.phone,
-            email: payload.email, // Make sure to include email
-            role: 'admin',
-            status: 'approved',
-            created_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        console.log("Profile creation result:", { profileData, profileError });
+        // Step 2: Insert into admin_profiles as "pending"
+        const { error: profileError } = await supabase
+          .from("admin_profiles")
+          .insert([
+            {
+              id: authData.user.id,
+              first_name: payload.firstName,
+              last_name: payload.lastName,
+              phone: payload.phone,
+              email: payload.email,
+              role: "admin",
+              status: "pending",
+              created_at: new Date().toISOString(),
+            },
+          ]);
 
         if (profileError) {
           console.error("Profile creation error:", profileError);
@@ -150,12 +141,11 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        showError("signupForm", "Signup successful! Your account is pending approval.", null, "success");
-        
+        showError("signupForm", "✅ Registration successful! Please wait for super admin approval.", null, "success");
+
         setTimeout(() => {
           window.location.href = "./LoginPage.html";
         }, 3000);
-
       } catch (error) {
         console.error("Signup error:", error);
         showError("signupForm", "Network error: " + error.message, "firstName");
@@ -164,137 +154,89 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ============================================
-  // LOGIN FORM - FIXED VERSION
+  // LOGIN FORM
   // ============================================
   const loginForm = document.getElementById("loginForm");
-  if (loginForm) {
-    console.log("Login form found");
+    if (loginForm) {
+      console.log("Login form found");
 
-    loginForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      console.log("Login form submitted");
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        console.log("Login form submitted");
 
-      const email = document.getElementById("email")?.value.trim();
-      const password = document.getElementById("password")?.value;
+        const email = document.getElementById("email")?.value.trim();
+        const password = document.getElementById("password")?.value;
 
-      console.log("Login attempt for email:", email);
-
-      if (!email || !password) {
-        showError("loginForm", "Please enter both email and password", "email");
-        return;
-      }
-
-      try {
-        // Step 1: Sign in with Supabase Auth
-        console.log("Attempting sign in...");
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: password
-        });
-
-        console.log("Sign in result:", { authData, authError });
-
-        if (authError) {
-          console.error("Sign in error:", authError);
-          showError("loginForm", "Invalid email or password", "email");
+        if (!email || !password) {
+          showError("loginForm", "Please enter both email and password", "email");
           return;
         }
 
-        if (!authData || !authData.user) {
-          showError("loginForm", "Login failed. Please try again.", "email");
-          return;
-        }
+        try {
+          // Step 1: Sign in with Supabase Auth
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
-        console.log("✅ User authenticated:", authData.user.id);
+          if (authError) {
+            console.error("Sign in error:", authError);
+            showError("loginForm", "Invalid email or password", "email");
+            return;
+          }
 
-        // Step 2: Get admin profile (RLS is disabled, so this should work)
-        console.log("Fetching admin profile...");
-        const { data: profileData, error: profileError } = await supabase
-          .from('admin_profiles')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-        
-        console.log("Profile query result:", { profileData, profileError });
+          const { user, session } = authData;
+          if (!user) {
+            showError("loginForm", "Login failed. Please try again.", "email");
+            return;
+          }
 
-        if (profileError || !profileData) {
-          console.error("Profile query error:", profileError);
-          
-          // For superadmin, we might not have a profile yet, so create one
-          if (email.includes('superadmin') || email.includes('admin')) {
-            console.log("Creating admin profile for superadmin...");
-            
-            const { data: newProfile, error: createError } = await supabase
-              .from('admin_profiles')
-              .insert({
-                id: authData.user.id,
-                first_name: 'Super',
-                last_name: 'Admin',
-                email: email,
-                role: 'superadmin',
-                status: 'approved',
-                created_at: new Date().toISOString()
-              })
-              .select()
-              .single();
-              
-            if (createError) {
-              console.error("Failed to create profile:", createError);
-              await supabase.auth.signOut();
-              showError("loginForm", "Admin profile not found. Please contact support.", "email");
-              return;
-            }
-            
-            profileData = newProfile;
-          } else {
+          console.log("✅ User authenticated:", user.id);
+
+          // Step 2: Fetch admin profile
+          const { data: profile, error: profileError } = await supabase
+            .from("admin_profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
+
+          if (profileError) {
+            console.error("Profile query error:", profileError);
             await supabase.auth.signOut();
             showError("loginForm", "Admin profile not found. Please contact support.", "email");
             return;
           }
-        }
 
-        console.log("Admin profile:", profileData);
+          console.log("🧾 Profile fetched:", profile);
 
-        // // Step 3: Check approval status (skip for superadmin)
-        // if (profileData.role !== 'superadmin' && profileData.status !== 'approved') {
-        //   await supabase.auth.signOut();
-        //   showError("loginForm", "Your account is awaiting approval by Super Admin.", "email");
-        //   return;
-        // }
-
-        // Step 4: Store session and data
-        localStorage.setItem("token", authData.session.access_token);
-        localStorage.setItem("adminData", JSON.stringify({
-          id: profileData.id,
-          first_name: profileData.first_name,
-          last_name: profileData.last_name,
-          email: profileData.email || authData.user.email,
-          phone: profileData.phone,
-          role: profileData.role,
-          status: profileData.status
-        }));
-        
-        showError("loginForm", "Login successful!", null, "success");
-        
-        console.log("✅ Login complete, redirecting...");
-
-        // Step 5: Redirect with delay to ensure data is stored
-        setTimeout(() => {
-          if (profileData.role === "superadmin") {
-            window.location.href = "../../Pages/SuperAdmin.html";
-          } else if (profileData.role === "admin") {
-            window.location.href = "../../Pages/LandingPage.html";
-          } else {
-            console.error("Unknown role:", profileData.role);
-            showError("loginForm", "Unauthorized role", null);
+          // Step 3: Check approval status (skip for superadmin)
+          if (profile.role !== "superadmin" && profile.status !== "approved") {
+            alert("Your admin account is still pending approval from the Super Admin.");
+            await supabase.auth.signOut();
+            return;
           }
-        }, 1500);
 
-      } catch (error) {
-        console.error("Login error (catch):", error);
-        showError("loginForm", "Network error: " + error.message, "email");
-      }
-    });
+          // Step 4: Store user info
+          localStorage.setItem("token", session.access_token);
+          localStorage.setItem("adminData", JSON.stringify(profile));
+
+          showError("loginForm", "Login successful!", null, "success");
+
+          // Step 5: Redirect based on role
+          setTimeout(() => {
+            if (profile.role === "superadmin") {
+              window.location.href = "../../Pages/SuperAdmin.html";
+            } else if (profile.role === "admin") {
+              window.location.href = "../../Pages/LandingPage.html";
+            } else {
+              showError("loginForm", "Unauthorized role", null);
+            }
+          }, 1500);
+        } catch (error) {
+          console.error("Login error:", error);
+          showError("loginForm", "Network error: " + error.message, "email");
+        }
+      });
   }
 
   // ============================================

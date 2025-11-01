@@ -29,7 +29,7 @@ async function initializeSidebar() {
     document.getElementById('userEmail').textContent = user.email;
 
     // Show/hide menu items based on role
-    if (user.role === 'super_admin') {
+    if (user.role === 'superadmin') {
       // Super Admin sees all menu items
       showSuperAdminMenu();
     } else {

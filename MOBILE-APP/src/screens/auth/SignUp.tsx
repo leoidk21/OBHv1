@@ -41,7 +41,8 @@ const SignUp = () => {
     }
 
     try {
-      const { user, session } = await signUpWithEmail(
+      // Use the signup function from user-auth.js (not signUpWithEmail)
+      const { user, session } = await signup(
         firstName.trim(),
         lastName.trim(), 
         email.trim(), 
@@ -71,7 +72,12 @@ const SignUp = () => {
       
     } catch (err: any) {
       console.error('Signup error:', err);
-      Alert.alert("Error", err.message || "Something went wrong");
+      
+      // Check for specific error messages
+      const errorMessage = err.message || err.error?.message || "Something went wrong";
+      
+      // Show the error in an alert
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const pool = require('../db');
+const supabase = require('../supabase');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -80,51 +80,71 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// --- LOGIN ---
+// --- USE THIS SINGLE LOGIN ROUTE ---
+// REPLACE your current login route with this:
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password required" });
+    console.log('🔑 Login attempt for:', email);
+
+    // 1. Authenticate with Supabase
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email, 
+      password
+    });
+
+    if (authError) {
+      console.log('❌ Auth failed:', authError.message);
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Use Supabase for query
-    const { data, error } = await supabase
-      .from('admins')
+    console.log('✅ Supabase auth successful');
+
+    // 2. Get admin profile
+    const { data: profile, error: profileError } = await supabase
+      .from('admin_profiles')
       .select('*')
-      .eq('email', email)
+      .eq('id', authData.user.id)
       .single();
 
-    if (error || !data) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    if (profileError || !profile) {
+      console.log('❌ Profile not found');
+      await supabase.auth.signOut();
+      return res.status(403).json({ error: "Admin profile not found" });
     }
 
-    const admin = data;
-
-    const validPassword = await bcrypt.compare(password, admin.password_hash);
-    if (!validPassword) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    // 3. Check approval status
+    if (profile.role !== 'superadmin' && profile.status !== 'approved') {
+      await supabase.auth.signOut();
+      return res.status(403).json({ error: "Account pending approval" });
     }
 
-    if (admin.status !== 'approved') {
-      return res.status(403).json({ error: "Your account is awaiting approval by Super Admin." });
-    }
-
-    const token = generateToken(admin);
-
-    const safeAdmin = {
-      id: admin.id,
-      first_name: admin.first_name,
-      last_name: admin.last_name,
-      email: admin.email,
-      phone: admin.phone,
-      role: admin.role
+    // 4. ✅ CRITICAL: Generate YOUR custom JWT token
+    const tokenPayload = {
+      id: profile.id,
+      email: profile.email,
+      role: profile.role,
+      status: profile.status,
+      first_name: profile.first_name,
+      last_name: profile.last_name
     };
 
-    res.json({ token, admin: safeAdmin });
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: '24h'
+    });
+
+    console.log('🎫 Custom JWT generated for:', profile.role);
+
+    // 5. Return token to frontend
+    res.json({
+      success: true,
+      token: token, // ⚠️ THIS IS WHAT YOUR MIDDLEWARE EXPECTS
+      user: tokenPayload
+    });
+
   } catch (err) {
-    console.error("Login error:", err.message);
+    console.error("Login error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -223,6 +243,39 @@ router.post('/reset-password', async (req, res) => {
   } catch (err) {
     console.error("Reset password error:", err.message);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Add this temporary endpoint to generate tokens
+router.post('/generate-token', async (req, res) => {
+  try {
+    const { id, email, role, status, first_name, last_name } = req.body;
+    
+    console.log('🔑 Generating token for:', email, 'Role:', role);
+
+    const tokenPayload = {
+      id,
+      email,
+      role,
+      status,
+      first_name,
+      last_name
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: '24h'
+    });
+
+    console.log('✅ Token generated successfully');
+
+    res.json({
+      success: true,
+      token,
+      user: tokenPayload
+    });
+  } catch (err) {
+    console.error('Token generation error:', err);
+    res.status(500).json({ error: 'Token generation failed' });
   }
 });
 

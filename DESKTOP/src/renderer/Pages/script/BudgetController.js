@@ -209,7 +209,7 @@ class BudgetController {
         }, 0);
     }   
 
-    async sendReminder(eventId, clientName) {
+   async sendReminder(eventId, clientName) {
         let submitBtn;
         let originalText;
         let form;
@@ -232,22 +232,24 @@ class BudgetController {
             submitBtn.textContent = "Sending...";
             submitBtn.disabled = true;
 
-            // Use the SAME pattern as your Landing Page approveEvent/rejectEvent
-            console.log("🔄 Inserting directly into payment_reminders via REST API...");
+            console.log("🔄 Inserting reminder into payment_reminders...");
+            
+            // Match the exact schema of payment_reminders table
+            const reminderData = {
+                event_id: parseInt(eventId),
+                client_name: clientName,
+                notes: notes,
+                status: 'pending'
+            };
+            
+            console.log("📤 Sending data:", reminderData);
             
             const data = await this.supabaseFetch(`${this.API_BASE}/payment_reminders`, {
                 method: "POST",
                 headers: {
                     "Prefer": "return=representation"
                 },
-                body: JSON.stringify([
-                    {
-                        event_id: parseInt(eventId),
-                        client_name: clientName,
-                        notes: notes,
-                        status: 'pending'
-                    }
-                ])
+                body: JSON.stringify([reminderData])
             });
 
             console.log("✅ Reminder stored in payment_reminders:", data);
@@ -272,6 +274,7 @@ class BudgetController {
             
         } catch (error) {
             console.error("❌ Error sending reminder:", error);
+            console.error("Error details:", error.message);
             
             // Fallback: Store locally and show success
             this.storeReminderLocally(eventId, clientName, notes);
@@ -298,7 +301,7 @@ class BudgetController {
                 submitBtn.disabled = false;
             }
         }
-    }
+   }
 
     fallbackSendReminder(eventId, clientName, notes, submitBtn, originalText) {
         const form = document.getElementById("sendReminderForm");
