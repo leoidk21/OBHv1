@@ -54,7 +54,7 @@
                     </a>
                 </nav>
                 <div class="user-info">
-                    <img src="../assets/admin-profile.png" alt="User" id="userAvatar">
+                    <img src="../assets/Adminv2.png" alt="User" id="userAvatar">
                     <div class="user-details">
                         <p class="user-name" id="userName">Loading...</p>
                         <p class="user-email" id="userEmail">Loading...</p>
@@ -118,23 +118,25 @@
                             <button onclick="applyFilters()">Apply Filters</button>
                             <button onclick="resetFilters()" style="background: #6c757d;">Reset</button>
                         </div>
-                        <table class="logs-table" id="logsTable">
-                            <thead>
-                                <tr>
-                                    <th>Timestamp</th>
-                                    <th>Admin</th>
-                                    <th>Action</th>
-                                    <th>Page</th>
-                                    <th>Details</th>
-                                    <th>View</th>
-                                </tr>
-                            </thead>
-                            <tbody id="logsTableBody">
-                                <tr>
-                                    <td colspan="6" style="text-align: center;">Loading...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-container">
+                            <table class="logs-table" id="logsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Admin</th>
+                                        <th>Action</th>
+                                        <th>Page</th>
+                                        <th>Details</th>
+                                        <th>View</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsTableBody">
+                                    <tr>
+                                        <td colspan="6" style="text-align: center;">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                         <div class="pagination" id="pagination"></div>
                     </div>
                 </div>
@@ -143,31 +145,32 @@
                 <div id="adminsTab" class="tab-content">
                     <div class="logs-container">
                         <h2>Manage Administrators</h2>
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Phone</th>
-                                    <th>Role</th>
-                                    <th>Created</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminsTableBody">
-                                <tr>
-                                    <td colspan="6" style="text-align: center;">Loading...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-container">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th>Role</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminsTableBody">
+                                    <tr>
+                                        <td colspan="6" style="text-align: center;">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
                 <!--===== Stats Dashboard =====-->
                 <!--===== Tab: QR Code =====-->
                 <div id="qrTab" class="tab-content">
                     <div class="logs-container">
-                        <h1 class="tab-title">Generate QR Code for Mobile App Installation</h1>
-                        <p class="tab-description">One time use QR code for mobile app installation</p>
+                        <p class="tab-description">Scan this to download the Mobile Application!</p>
                         <div class="qrCode">
                             <p class="qrCodeText" style="display: none;">Qr Code will be displayed here</p>
                             <img src="../assets/Orchestrated By HIStory Mobile-Application.png" alt="qr-image">

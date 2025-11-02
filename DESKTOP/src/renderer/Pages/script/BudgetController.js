@@ -623,7 +623,7 @@ class BudgetController {
         const filteredEvents = this.getFilteredEvents();
         
         if (filteredEvents.length === 0) {
-            coordinatorsTbody.innerHTML = '<tr><td colspan="5" class="no-data">No coordinator fees to display</td></tr>';
+            coordinatorsTbody.innerHTML = '<tr><td colspan="6" class="no-data">No coordinator fees to display</td></tr>';
             return;
         }
 
@@ -636,6 +636,10 @@ class BudgetController {
             const coordinatorFee = totalExpenses * 0.20;
             const formattedFee = this.formatCurrency(coordinatorFee);
             
+            // Get current payment status or default to 'pending'
+            const paymentStatus = event.payment_status || 'pending';
+            const statusClass = `status-${paymentStatus}`;
+            
             return `
                 <tr>
                     <td>
@@ -646,7 +650,11 @@ class BudgetController {
                     </td>
                     <td>${event.guest_range || 'N/A'}</td>
                     <td>${this.formatDate(event.event_date)}</td>
-                    <td><span class="status status-pending">Pending</span></td>
+                    <td>
+                        <span class="status ${statusClass}">
+                            ${this.formatPaymentStatus(paymentStatus)}
+                        </span>
+                    </td>
                     <td>
                         <button class="send-reminder-btn" 
                                 data-event-id="${event.id}" 
@@ -654,20 +662,120 @@ class BudgetController {
                             Send Reminder
                         </button>
                     </td>
+                    <td>
+                        <button class="update-payment-btn" 
+                                data-event-id="${event.id}"
+                                data-current-status="${paymentStatus}">
+                            Update Payment
+                        </button>
+                    </td>
                 </tr>
             `;
         }).join('');
     }
 
+    formatPaymentStatus(status) {
+        const statusMap = {
+            'pending': 'Pending',
+            'paid': 'Paid',
+            'partial': 'Partial Payment',
+            'overdue': 'Overdue',
+            'cancelled': 'Cancelled'
+        };
+        return statusMap[status] || 'Pending';
+    }
+
+    async updatePaymentStatus(eventId, currentStatus) {
+        try {
+            console.log("🔄 Updating payment status for event:", eventId);
+            
+            // Define available status options
+            const statusOptions = ['pending', 'paid', 'partial', 'overdue', 'cancelled'];
+            const currentIndex = statusOptions.indexOf(currentStatus);
+            const nextIndex = (currentIndex + 1) % statusOptions.length;
+            const newStatus = statusOptions[nextIndex];
+            
+            console.log(`🔄 Changing status from ${currentStatus} to ${newStatus}`);
+            
+            // Update in database
+            const response = await fetch(`${this.API_BASE}/event_plans?id=eq.${eventId}`, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': this.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify({
+                    payment_status: newStatus,
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+            }
+
+            // Update local data
+            const event = this.events.find(e => e.id === eventId);
+            if (event) {
+                event.payment_status = newStatus;
+            }
+
+            // 🔥 LOG THE PAYMENT STATUS UPDATE
+            console.log("📝 Logging payment status update...");
+            const logResult = await AdminLogger.logAction('update_payment_status', 'Budget Page', {
+                event_id: eventId,
+                client_name: event?.client_name || 'Unknown',
+                old_status: currentStatus,
+                new_status: newStatus,
+                updated_at: new Date().toISOString()
+            });
+            
+            console.log("📝 Admin log result:", logResult);
+
+            // Refresh the display
+            this.displayCoordinatorsFee();
+            
+            this.showSuccess(`Payment status updated to: ${this.formatPaymentStatus(newStatus)}`);
+            
+        } catch (error) {
+            console.error("❌ Error updating payment status:", error);
+            
+            // 🔥 LOG THE FAILED UPDATE ATTEMPT
+            console.log("📝 Logging failed payment status update...");
+            const logResult = await AdminLogger.logAction('update_payment_status_failed', 'Budget Page', {
+                event_id: eventId,
+                error: error.message,
+                attempted_at: new Date().toISOString()
+            });
+            
+            this.showError("Failed to update payment status");
+        }
+    }
+
     setupEventListeners() {
-    // Use event delegation with better filtering
         document.addEventListener('click', (e) => {
             console.log("🖱️ Clicked:", e.target.className, "ID:", e.target.id, "Tag:", e.target.tagName);
+
+            // Handle update payment button clicks - ADD THIS BACK
+            if (e.target.classList.contains('update-payment-btn')) {
+                // Prevent multiple handlers
+                e.stopPropagation();
+                e.preventDefault();
+                
+                const eventId = e.target.dataset.eventId;
+                const currentStatus = e.target.dataset.currentStatus;
+                
+                console.log("💰 Updating payment for event:", eventId, "Current status:", currentStatus);
+                
+                this.updatePaymentStatus(eventId, currentStatus);
+            }
 
             // Handle send reminder button clicks
             if (e.target.classList.contains('send-reminder-btn') && !e.target.id) {
                 // Prevent multiple handlers
                 e.stopPropagation();
+                e.preventDefault();
                 
                 const eventId = e.target.dataset.eventId;
                 const clientName = e.target.dataset.clientName;

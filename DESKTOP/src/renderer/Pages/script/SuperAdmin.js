@@ -1485,7 +1485,7 @@ function setupTabs() {
             const titles = {
                 logs: "Admin Task Logs",
                 admins: "Manage Administrators",
-                qr: "QR Code Generator",
+                qr: "Scan QR Code",
                 gallery: "Gallery Management",
             };
             

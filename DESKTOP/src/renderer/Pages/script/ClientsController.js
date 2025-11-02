@@ -9,8 +9,8 @@ class ClientController {
 
     async loadClients() {
         try {
-            // Use direct Supabase call
-            const response = await fetch(`${this.API_BASE}/event_plans?status=eq.Approved&select=*`, {
+            // Join event_plans with mobile_users to get the email
+            const response = await fetch(`${this.API_BASE}/event_plans?status=eq.Approved&select=*,mobile_users!mobile_user_id(first_name,last_name,email)`, {
                 headers: {
                     'apikey': this.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
@@ -23,6 +23,7 @@ class ClientController {
             }
 
             const data = await response.json();
+            console.log("Joined clients data:", data);
             this.clients = data || [];
             this.displayClients();
             this.showContent();
@@ -49,8 +50,8 @@ class ClientController {
 
         clientsTbody.innerHTML = this.clients.map(client => `
             <tr>
-                <td>${client.client_name}</td>
-                <td>${client.client_email || 'Not provided'}</td>
+                <td>${client.mobile_users ? `${client.mobile_users.first_name} ${client.mobile_users.last_name}` : client.client_name}</td>
+                <td>${client.mobile_users ? client.mobile_users.email : 'No email'}</td>
                 <td>${client.event_type}</td>
                 <td>${this.formatDate(client.submitted_at)}</td>
             </tr>
@@ -61,9 +62,13 @@ class ClientController {
     searchClients(query) {
         const searchTerm = query.toLowerCase().trim();
 
-        // Filter clients by name
         const filtered = this.clients.filter(client =>
-            client.client_name && client.client_name.toLowerCase().includes(searchTerm)
+            (client.mobile_users && 
+                (client.mobile_users.first_name.toLowerCase().includes(searchTerm) ||
+                client.mobile_users.last_name.toLowerCase().includes(searchTerm) ||
+                client.mobile_users.email.toLowerCase().includes(searchTerm))
+            ) ||
+            (client.client_name && client.client_name.toLowerCase().includes(searchTerm))
         );
 
         const clientsTbody = document.getElementById('clients-tbody');
@@ -71,16 +76,15 @@ class ClientController {
 
         if (filtered.length === 0) {
             clientsTbody.innerHTML = `
-                <tr><td colspan="5" class="no-data">No clients found</td></tr>
+                <tr><td colspan="4" class="no-data">No clients found</td></tr>
             `;
             return;
         }
 
         clientsTbody.innerHTML = filtered.map(client => `
             <tr>
-                <td>${client.client_name}</td>
-                <td>${client.client_email || 'Not provided'}</td>
-                <td>${client.client_phone || 'Not provided'}</td>
+                <td>${client.mobile_users ? `${client.mobile_users.first_name} ${client.mobile_users.last_name}` : client.client_name}</td>
+                <td>${client.mobile_users ? client.mobile_users.email : 'No email'}</td>
                 <td>${client.event_type}</td>
                 <td>${this.formatDate(client.submitted_at)}</td>
             </tr>

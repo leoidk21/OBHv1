@@ -99,6 +99,12 @@
     to   { opacity: 1; transform: translateY(0); }
 }
 
+.account-image {
+    border-radius: 50%;
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+}
 
 .account {
     gap: 1rem;
@@ -121,15 +127,8 @@
     margin-bottom: 15px;
 }
 
-.profile-header h3 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 600;
-    font-family: 'Poppins', sans-serif;
-}
-
 .edit-btn {
-    font-size: 16px;
+    font-size: 14px;
     font-family: 'Poppins', sans-serif;
 }
 
@@ -180,7 +179,7 @@
 }
 
 #profile-email {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 500;
     font-family: 'Poppins', sans-serif;
 }
@@ -193,7 +192,7 @@
 
 #profile-role {
     font-size: 18px;
+    margin-top: 2px;
     color: rgb(0, 176, 0);
     font-family: 'Poppins', sans-serif;
 }
-

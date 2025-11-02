@@ -1,31 +1,31 @@
 function getSupabaseClient() {
-  // 1️⃣ Try preload-exposed client via electronAPI
+  // preload-exposed client via electronAPI
   if (window.electronAPI?.supabase) {
-    console.log("✅ Supabase client loaded via electronAPI");
+    console.log("Supabase client loaded via electronAPI");
     return window.electronAPI.supabase;
   }
 
-  // 2️⃣ Try direct global client (from HTML)
+  // Try direct global client (from HTML)
   if (window.supabase && typeof window.supabase.auth?.signInWithPassword === "function") {
-    console.log("✅ Supabase client loaded via direct exposure");
+    console.log("Supabase client loaded via direct exposure");
     return window.supabase;
   }
 
-  // 3️⃣ Create one using preload config if possible
+  // Create one using preload config if possible
   if (window.supabaseConfig?.isConfigured && window.supabase?.createClient) {
-    console.log("✅ Creating Supabase client from preload config...");
+    console.log("Creating Supabase client from preload config...");
     const { createClient } = window.supabase;
     const client = createClient(window.supabaseConfig.url, window.supabaseConfig.anonKey);
     window.supabase = client; // make globally available
     return client;
   }
 
-  console.error("❌ Supabase client not found — preload may not have exposed it.");
+  console.error("Supabase client not found — preload may not have exposed it.");
   alert("Error: Supabase not available. Please restart the app.");
   return null;
 }
 
-// ✅ Always initialize using this unified function
+// Always initialize using this unified function
 const supabase = getSupabaseClient();
 
 if (!supabase) {
@@ -141,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
 
-        showError("signupForm", "✅ Registration successful! Please wait for super admin approval.", null, "success");
+        showError("signupForm", "Registration successful! Please wait for super admin approval.", null, "success");
 
         setTimeout(() => {
           window.location.href = "./LoginPage.html";
@@ -191,7 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
 
-          console.log("✅ User authenticated:", user.id);
+          console.log("User authenticated:", user.id);
 
           // Step 2: Fetch admin profile
           const { data: profile, error: profileError } = await supabase
@@ -207,7 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
 
-          console.log("🧾 Profile fetched:", profile);
+          console.log("Profile fetched:", profile);
 
           // Step 3: Check approval status (skip for superadmin)
           if (profile.role !== "superadmin" && profile.status !== "approved") {
@@ -295,7 +295,7 @@ async function loadAdminProfile() {
     if (storedAdmin) {
       const adminData = JSON.parse(storedAdmin);
       if (adminData.role === 'superadmin') {
-        console.log("✅ Superadmin - using stored data");
+        console.log("Superadmin - using stored data");
         return; // Don't need to refetch for superadmin
       }
     }
@@ -368,7 +368,7 @@ function updateProfileElements(data) {
   document.querySelectorAll("#profile-role, .role-text")
     .forEach(el => el.textContent = roleText);
 
-  console.log("✅ UI updated successfully!");
+  console.log("UI updated successfully!");
 }
 
 async function handleLogout(message) {
@@ -436,7 +436,7 @@ window.addEventListener('load', async () => {
         return;
       }
       
-      console.log("✅ Session valid:", session.user.email);
+      console.log("Session valid:", session.user.email);
       
       // For superadmin pages, don't do strict profile validation
       if (window.location.pathname.includes('SuperAdmin')) {
