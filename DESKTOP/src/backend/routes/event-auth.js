@@ -15,39 +15,55 @@ const router = express.Router();
 // ============================================
 // NOTIFICATION HELPER FUNCTION
 // ============================================
+// event-auth.js - FIXED sendEventStatusNotification function
 const sendEventStatusNotification = async (userId, eventId, status, eventName, remarks = '') => {
   try {
-    console.log('🎯 Attempting to send notification to user:', userId);
-    console.log('📝 Notification details:', { userId, eventId, status, eventName, remarks });
+    console.log('🎯 Attempting to send notification to user ID:', userId);
     
-    // Ensure status is a string and handle undefined/null
+    // First, get the user's UUID from mobile_users
+    const userResult = await pool.query(
+      `SELECT auth_uid as user_uuid 
+       FROM mobile_users 
+       WHERE id = $1`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      console.error('❌ User not found in mobile_users:', userId);
+      return false;
+    }
+
+    const userUuid = userResult.rows[0].user_uuid;
+    console.log('✅ Found user UUID:', userUuid);
+
     const statusText = String(status || 'updated').toLowerCase();
     
     const { data, error } = await supabase
       .from('notifications')
       .insert([
         {
-          user_uuid: userId, // ← Change from user_id to user_uuid
+          user_uuid: userUuid, // Use the UUID
           type: 'EVENT_STATUS_UPDATE',
           title: 'Event Status Update',
           message: `Your event "${eventName}" has been ${statusText}`,
           data: {
             eventId: eventId,
             status: status,
-            remarks: remarks
+            remarks: remarks,
+            eventName: eventName
           },
           is_read: false,
           created_at: new Date().toISOString()
         }
       ])
-      .select(); // Add this to get the inserted data back
+      .select();
 
     if (error) {
       console.error('❌ Supabase insert error:', error);
       return false;
     }
 
-    console.log('✅ Notification inserted successfully:', data);
+    console.log('✅ Notification inserted successfully for user:', userUuid);
     return true;
     
   } catch (error) {
@@ -59,6 +75,7 @@ const sendEventStatusNotification = async (userId, eventId, status, eventName, r
 // ============================================
 // APPROVE / REJECT EVENT (UPDATED WITH NOTIFICATIONS)
 // ============================================
+// In event-auth.js - UPDATE THE REVIEW ENDPOINT
 router.put('/review/:id', verifyAdminAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -75,9 +92,12 @@ router.put('/review/:id', verifyAdminAuth, async (req, res) => {
       });
     }
 
-    // First get the event details to know the user_id
+    // ✅ FIXED: Get event with user UUID
     const eventResult = await pool.query(
-      `SELECT ep.*, CONCAT(mu.first_name, ' ', mu.last_name) AS user_name 
+      `SELECT 
+          ep.*, 
+          mu.auth_uid as user_uuid,  // Get the UUID
+          CONCAT(mu.first_name, ' ', mu.last_name) AS user_name 
        FROM event_plans ep 
        LEFT JOIN mobile_users mu ON ep.user_id = mu.id 
        WHERE ep.id = $1`,
@@ -93,7 +113,7 @@ router.put('/review/:id', verifyAdminAuth, async (req, res) => {
 
     const event = eventResult.rows[0];
 
-    // Update the event status FIRST
+    // Update the event status
     const updateResult = await pool.query(
       `UPDATE event_plans
        SET 
@@ -117,27 +137,51 @@ router.put('/review/:id', verifyAdminAuth, async (req, res) => {
 
     console.log('🔄 Calling sendEventStatusNotification with:', {
       userId: event.user_id,
+      userUuid: event.user_uuid, // This is what we need
       eventId: event.id,
       status: status,
       eventName: event.event_type
     });
 
-    // Send notification AFTER successful update - CALL THIS ONLY ONCE
-    const notificationSent = await sendEventStatusNotification(
-      event.user_id, 
-      event.id, 
-      status, 
-      event.event_type || 'Event',
-      remarks
-    );
+    // ✅ FIXED: Send notification with UUID
+    if (event.user_uuid) {
+      const notificationData = {
+        user_uuid: event.user_uuid, // Use the UUID
+        type: 'EVENT_STATUS_UPDATE',
+        title: `Event ${status}!`,
+        message: `Your event "${event.client_name}" has been ${status.toLowerCase()}.`,
+        data: {
+          eventId: parseInt(id),
+          eventName: event.client_name,
+          newStatus: status,
+          eventType: event.event_type,
+          eventDate: event.event_date,
+          remarks: remarks
+        },
+        is_read: false,
+        created_at: new Date().toISOString()
+      };
 
-    console.log('📢 Notification send result:', notificationSent ? 'Success' : 'Failed');
+      const { data: notifData, error: notifError } = await supabase
+        .from('notifications')
+        .insert([notificationData])
+        .select();
+
+      if (notifError) {
+        console.error('❌ Notification insert error:', notifError);
+      } else {
+        console.log('✅ Notification sent successfully! ID:', notifData[0]?.id);
+        console.log('   For user UUID:', event.user_uuid);
+      }
+    } else {
+      console.error('❌ Cannot send notification - no user_uuid found');
+    }
 
     return res.status(200).json({
       success: true,
       message: `Event ${status.toLowerCase()} successfully`,
       event: updatedEvent,
-      notificationSent: notificationSent
+      notificationSent: !!event.user_uuid
     });
   } catch (error) {
     console.error('❌ Error reviewing event:', error);

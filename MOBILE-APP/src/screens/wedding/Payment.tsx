@@ -41,7 +41,17 @@ const Payment = () => {
     try {
       console.log("🔄 Fetching reminders from Supabase...");
       
-      // Remove !inner to make the event relation optional
+      // Get current client name from mobile user data
+      const currentClientName = eventData?.client_name;
+      
+      if (!currentClientName) {
+        console.log("❌ No current client name found");
+        setLoading(false);
+        return;
+      }
+
+      console.log("🔍 Looking for reminders for client:", currentClientName);
+      
       const { data, error } = await supabase
         .from('payment_reminders')
         .select(`
@@ -53,10 +63,11 @@ const Payment = () => {
           )
         `)
         .eq('status', 'pending')
+        .eq('client_name', currentClientName) 
         .order('sent_at', { ascending: false })
         .limit(1);
 
-      console.log("📊 Fetch result:", {
+      console.log("📊 Fetch result for client", currentClientName, ":", {
         hasData: !!data,
         dataLength: data?.length,
         data: data,
@@ -72,7 +83,6 @@ const Payment = () => {
         const reminderData = data[0];
         console.log("📝 Raw reminder data:", reminderData);
         
-        // Handle case where event_plans might be null or empty array
         const eventData = Array.isArray(reminderData.event_plans) 
           ? reminderData.event_plans[0] 
           : reminderData.event_plans;
@@ -84,16 +94,16 @@ const Payment = () => {
           due_date: reminderData.due_date || new Date().toISOString(),
           notes: reminderData.notes,
           client_name: reminderData.client_name,
-          event_type: eventData?.event_type || 'Event', // Fallback if no event data
+          event_type: eventData?.event_type || 'Event',
           sent_at: reminderData.sent_at,
           status: reminderData.status,
           event_id: reminderData.event_id
         };
         
-        console.log("✅ Processed reminder:", combinedReminder);
+        console.log("✅ Processed reminder for current client:", combinedReminder);
         setReminder(combinedReminder);
       } else {
-        console.log("ℹ️ No reminders found in database");
+        console.log("ℹ️ No reminders found for current client", currentClientName);
         setReminder(null);
       }
     } catch (error) {

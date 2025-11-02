@@ -136,13 +136,14 @@ export const signup = async (firstName, lastName, email, password) => {
 
         if (authError) throw authError;
 
-        // Create mobile user record
+        // ✅ FIX: Create mobile user record WITH auth_uid
         const { data: mobileUser, error: mobileError } = await supabase
             .from('mobile_users')
             .insert([{
                 first_name: firstName,
                 last_name: lastName,
                 email: email,
+                auth_uid: authData.user.id, // ✅ ADD THIS LINE
                 role: 'user'
             }])
             .select()

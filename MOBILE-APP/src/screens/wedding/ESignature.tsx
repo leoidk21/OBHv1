@@ -21,9 +21,9 @@ const ESignature  = () => {
     getEventSummary,
   } = useEvent();
 
-  useEffect(() => {
-    console.log('Event Data Structure:', JSON.stringify(eventData, null, 2));
-  }, [eventData]);
+//   useEffect(() => {
+//     console.log('Event Data Structure:', JSON.stringify(eventData, null, 2));
+//   }, [eventData]);
 
   const ref = useRef<any>(null);
   const [signature, setSignature] = useState<string | null>(null);

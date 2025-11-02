@@ -20,185 +20,208 @@ const router = express.Router();
 // SEND REMINDER END POINTS
 // ================ //
 router.post('/send-reminder', authenticateToken, async (req, res) => {
-try {
-    const { eventId, clientName, gcashName, gcashNumber, dueDate, notes } = req.body;
-    
-    // Get user_id from event
-    const eventResult = await pool.query(
-    `SELECT user_id FROM event_plans WHERE id = $1`,
-    [eventId]
-    );
+    try {
+        const { eventId, clientName, gcashName, gcashNumber, dueDate, notes } = req.body;
+        
+        // Get user_id from event
+        const eventResult = await pool.query(
+            `SELECT user_id FROM event_plans WHERE id = $1`,
+            [eventId]
+        );
 
-    if (eventResult.rows.length === 0) {
-    return res.status(404).json({ error: "Event not found" });
-    }
+        if (eventResult.rows.length === 0) {
+        return res.status(404).json({ error: "Event not found" });
+        }
 
-    const userId = eventResult.rows[0].user_id;
+        const userId = eventResult.rows[0].user_id;
 
-    // Store reminder
-    const result = await pool.query(
-    `INSERT INTO payment_reminders (event_id, client_name, gcash_name, gcash_number, due_date, notes, sent_at)
-    VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
-    [eventId, clientName, gcashName, gcashNumber, dueDate, notes]
-    );
+        // Store reminder
+        const result = await pool.query(
+            `INSERT INTO payment_reminders (event_id, client_name, gcash_name, gcash_number, due_date, notes, sent_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
+            [eventId, clientName, gcashName, gcashNumber, dueDate, notes]
+        );
 
-    // Send notification
-    await sendPaymentReminderNotification(userId, eventId, clientName, dueDate, gcashName, gcashNumber, notes);
+        // Send notification
+        await sendPaymentReminderNotification(userId, eventId, clientName, dueDate, gcashName, gcashNumber, notes);
 
-    res.json({ 
-    success: true, 
-    message: "Reminder sent successfully"
-    });
-    
-} catch (err) {
-    console.error("Send reminder error:", err);
-    res.status(500).json({ error: err.message });
-}
+        res.json({ 
+            success: true, 
+            message: "Reminder sent successfully"
+        });
+            
+        } catch (err) {
+            console.error("Send reminder error:", err);
+            res.status(500).json({ error: err.message });
+        }
 });
+
 // ================= //
 // PAYMENT REMINDER NOTIFICATION FUNCTION
 // ================= //
 const sendPaymentReminderNotification = async (userId, eventId, clientName, dueDate, gcashName, gcashNumber, notes = '') => {
-try {
-    console.log('💰 Sending payment reminder to user:', userId);
-    
-    const formattedDueDate = new Date(dueDate).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-    });
+    try {
+        console.log('Sending payment reminder to user ID:', userId);
+        
+        const userResult = await pool.query(
+            `SELECT auth_uid as user_uuid
+             FROM mobile_users 
+             WHERE id = $1`,
+            [userId]
+        );
 
-    const message = `Payment reminder for ${clientName}. Due date: ${formattedDueDate}`;
-
-    const { data, error } = await supabase
-    .from('notifications')
-    .insert([
-        {
-        user_uuid: userId,
-        type: 'PAYMENT_REMINDER',
-        title: 'Payment Reminder',
-        message: message,
-        data: {
-            eventId: eventId,
-            clientName: clientName,
-            dueDate: dueDate,
-            formattedDueDate: formattedDueDate,
-            gcashName: gcashName,
-            gcashNumber: gcashNumber,
-            notes: notes
-        },
-        is_read: false,
-        created_at: new Date().toISOString()
+        if (userResult.rows.length === 0) {
+            console.error('❌ User not found in mobile_users:', userId);
+            return false;
         }
-    ]);
 
-    if (error) {
-    console.error('❌ Payment reminder insert error:', error);
-    return false;
+        const userUuid = userResult.rows[0].user_uuid;
+        console.log('💰 Found user UUID:', userUuid);
+        
+        const formattedDueDate = new Date(dueDate).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        const message = `Payment reminder for ${clientName}. Due date: ${formattedDueDate}`;
+
+        const { data, error } = await supabase
+        .from('notifications')
+        .insert([
+            {
+            user_uuid: userUuid,
+            type: 'PAYMENT_REMINDER',
+            title: 'Payment Reminder',
+            message: message,
+            data: {
+                eventId: eventId,
+                clientName: clientName,
+                dueDate: dueDate,
+                formattedDueDate: formattedDueDate,
+                gcashName: gcashName,
+                gcashNumber: gcashNumber,
+                notes: notes
+            },
+            is_read: false,
+            created_at: new Date().toISOString()
+            }
+        ]);
+
+        if (error) {
+            console.error('❌ Payment reminder insert error:', error);
+            return false;
+        }
+
+        console.log('✅ Payment reminder notification sent to user UUID:', userUuid);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error in sendPaymentReminderNotification:', error);
+        return false;
     }
-
-    console.log('✅ Payment reminder notification sent to user:', userId);
-    return true;
-    
-} catch (error) {
-    console.error('❌ Error in sendPaymentReminderNotification:', error);
-    return false;
-}
 };
 
 // ================ //
 // FILE UPLOAD
 // ================ //
 router.post('/upload-proof-base64', verifMobileAuth, async (req, res) => {
-try {
-    const { expenseId, eventId, imageData } = req.body;
-    
-    console.log("📨 Received upload request:");
-    console.log("   eventId:", eventId);
-    console.log("   expenseId:", expenseId);
-    console.log("   imageData length:", imageData?.length);
+    try {
+        const { expenseId, eventId, imageData } = req.body;
+        
+        console.log("📨 Received upload request:");
+        console.log("   eventId:", eventId);
+        console.log("   expenseId:", expenseId);
+        console.log("   imageData length:", imageData?.length);
 
-    if (!eventId || !expenseId || !imageData) {
-    console.log("❌ Missing required fields");
-    return res.status(400).json({ error: "Missing required fields" });
+        if (!eventId || !expenseId || !imageData) {
+        console.log("❌ Missing required fields");
+        return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        // First, get the current event data
+        const eventResult = await pool.query(
+        'SELECT expenses FROM event_plans WHERE id = $1',
+        [eventId]
+        );
+
+        if (eventResult.rows.length === 0) {
+        console.log("❌ Event not found with id:", eventId);
+        return res.status(404).json({ error: "Event not found" });
+        }
+
+        const currentExpenses = eventResult.rows[0].expenses || [];
+        console.log("📊 Current expenses count:", currentExpenses.length);
+
+        // Find and update the specific expense
+        let expenseFound = false;
+        const updatedExpenses = currentExpenses.map(expense => {
+        console.log("🔍 Checking expense:", expense.id, "vs", expenseId);
+        if (expense.id === expenseId) {
+            expenseFound = true;
+            console.log("✅ Found matching expense, updating proofUri");
+            return {
+            ...expense,
+            proofUri: imageData
+            };
+        }
+        return expense;
+        });
+
+        if (!expenseFound) {
+        console.log("❌ Expense not found in event expenses");
+        return res.status(404).json({ error: "Expense not found in event" });
+        }
+
+        console.log("🔄 Updated expenses:", updatedExpenses.length);
+
+        // Update the database with the modified expenses array
+        const updateResult = await pool.query(
+        'UPDATE event_plans SET expenses = $1 WHERE id = $2 RETURNING id',
+        [JSON.stringify(updatedExpenses), eventId]
+        );
+
+        console.log("💾 Database updated successfully:", updateResult.rows[0]);
+
+        res.json({ 
+        success: true, 
+        proofUrl: imageData,
+        message: "Proof uploaded successfully"
+        });
+
+    } catch (err) {
+        console.error("❌ Base64 upload error:", err);
+        console.error("❌ Error details:", err.stack);
+        res.status(500).json({ error: "Upload failed: " + err.message });
     }
-
-    // First, get the current event data
-    const eventResult = await pool.query(
-    'SELECT expenses FROM event_plans WHERE id = $1',
-    [eventId]
-    );
-
-    if (eventResult.rows.length === 0) {
-    console.log("❌ Event not found with id:", eventId);
-    return res.status(404).json({ error: "Event not found" });
-    }
-
-    const currentExpenses = eventResult.rows[0].expenses || [];
-    console.log("📊 Current expenses count:", currentExpenses.length);
-
-    // Find and update the specific expense
-    let expenseFound = false;
-    const updatedExpenses = currentExpenses.map(expense => {
-    console.log("🔍 Checking expense:", expense.id, "vs", expenseId);
-    if (expense.id === expenseId) {
-        expenseFound = true;
-        console.log("✅ Found matching expense, updating proofUri");
-        return {
-        ...expense,
-        proofUri: imageData
-        };
-    }
-    return expense;
-    });
-
-    if (!expenseFound) {
-    console.log("❌ Expense not found in event expenses");
-    return res.status(404).json({ error: "Expense not found in event" });
-    }
-
-    console.log("🔄 Updated expenses:", updatedExpenses.length);
-
-    // Update the database with the modified expenses array
-    const updateResult = await pool.query(
-    'UPDATE event_plans SET expenses = $1 WHERE id = $2 RETURNING id',
-    [JSON.stringify(updatedExpenses), eventId]
-    );
-
-    console.log("💾 Database updated successfully:", updateResult.rows[0]);
-
-    res.json({ 
-    success: true, 
-    proofUrl: imageData,
-    message: "Proof uploaded successfully"
-    });
-
-} catch (err) {
-    console.error("❌ Base64 upload error:", err);
-    console.error("❌ Error details:", err.stack);
-    res.status(500).json({ error: "Upload failed: " + err.message });
-}
 });
 
 // ================ //
 // EVENT PLANS STATUS
 // ================ //
 router.get('/status', verifMobileAuth, async (req, res) => {
-    const numericUserId = parseInt(req.user.id);
-    const result = await pool.query(`
-        SELECT status, event_type, client_name, event_date, submitted_at
-        FROM event_plans
-        WHERE user_id = $1
-        ORDER BY submitted_at DESC
-        LIMIT 1
-    `, [numericUserId]);
-    res.json({ status: result.rows[0]?.status || 'Pending' });
+    try {
+        const numericUserId = req.user.mobile_id; // Use integer ID
+        
+        const result = await pool.query(`
+            SELECT status, event_type, client_name, event_date, submitted_at
+            FROM event_plans
+            WHERE user_id = $1
+            ORDER BY submitted_at DESC
+            LIMIT 1
+        `, [numericUserId]);
+        
+        res.json({ status: result.rows[0]?.status || 'Pending' });
+    } catch (error) {
+        console.error('Error getting event status:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 // ================ //
 // CREATE A NEW EVENT
 // ================ //
-router.post('/submit', verifMobileAuth, async (req, res) => {
+router.post('/submit', authenticateToken, async (req, res) => {
     try {
         const {
             event_type,
@@ -219,14 +242,24 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
             mobile_app_id
         } = req.body;
 
-        // Get user_id from token
-        const user_id = req.user.id;
+        const mobile_user_id = req.user.mobile_id;
+        
+        console.log('Submitting event with user details:', {
+            mobile_user_id: mobile_user_id,
+            user_uuid: req.user.id,
+            email: req.user.email
+        });
 
         // Validate required fields
         if (!event_type || !client_name || !event_date) {
             return res.status(400).json({ 
                 error: 'Missing required fields: event_type, client_name, event_date' 
             });
+        }
+
+        if (!mobile_user_id) {
+            console.error('❌ No mobile_user_id found in req.user');
+            return res.status(400).json({ error: 'User authentication error' });
         }
 
         let e_signature_data = null;
@@ -241,14 +274,8 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
             e_signature_data = `/uploads/signatures/${fileName}`;
         }
 
-        const existingEvent = await pool.query(
-            `SELECT id, client_name, event_type
-            FROM event_plans
-            WHERE event_date = $1 AND status IN ('Pending', 'Approved')`,
-                [event_date]
-        );
+        console.log('💾 Inserting event with user_id:', mobile_user_id);
 
-        // In event-plans.js - FIX THE INSERT QUERY
         const result = await pool.query(
             `INSERT INTO event_plans 
                 (user_id, event_type, package, client_name, client_email, client_phone, partner_name, event_date,
@@ -256,7 +283,7 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING *`,
             [
-                user_id, 
+                mobile_user_id,
                 event_type, 
                 package_price, 
                 full_client_name || client_name, 
@@ -275,14 +302,20 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
         );
 
         const eventPlan = result.rows[0];
+        
+        console.log('Event created:', {
+            event_id: eventPlan.id,
+            user_id: eventPlan.user_id,
+            client_name: eventPlan.client_name
+        });
 
         // Save guests to event_guests table
         if (guests && guests.length > 0) {
             for (const guest of guests) {
                 await pool.query(
                     `INSERT INTO event_guests (event_plan_id, guest_name, status, invite_link, mobile_guest_id)
-                    VALUES ($1, $2, $3, $4)`,
-                    [eventPlan.id, guest.name, guest.status, guest.inviteLink, guest.id]
+                    VALUES ($1, $2, $3, $4, $5)`,
+                    [eventPlan.id, guest.name, guest.status || 'Pending', guest.inviteLink, guest.id]
                 );
             }
         }
@@ -295,7 +328,8 @@ router.post('/submit', verifMobileAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('Error submitting event:', error);
-        res.status(500).json({ error: 'Server error while submitting event' });
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ error: 'Server error while submitting event: ' + error.message });
     }
 });
 
@@ -321,13 +355,13 @@ router.get('/availability', async (req, res) => {
 // ================ //
 // RETRIEVE ALL EVENT PLANS
 // ================ //
-router.get('/', verifMobileAuth, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        console.log('Fetching all event plans for user:', req.user.id);
+        const numericUserId = req.user.mobile_id; // Use integer ID
         
         const result = await pool.query(
             'SELECT * FROM event_plans WHERE user_id = $1 ORDER BY submitted_at DESC',
-            [req.user.id]
+            [numericUserId]
         );
 
         res.json({
@@ -343,39 +377,43 @@ router.get('/', verifMobileAuth, async (req, res) => {
 // ================ //
 // REMINDERS FOR PAYMENT
 // ================ //
-router.get('/payment-reminders', verifMobileAuth, async (req, res) => {
-try {
-    const userId = req.user.id;
+router.get('/payment-reminders', authenticateToken, async (req, res) => {
+  try {
+    const numericUserId = req.user.mobile_id; // Use integer ID
     
     const result = await pool.query(
-    `SELECT pr.*, ep.client_name, ep.event_type 
-    FROM payment_reminders pr
-    JOIN event_plans ep ON pr.event_id = ep.id
-    WHERE ep.user_id = $1 AND pr.status = 'pending'
-    ORDER BY pr.sent_at DESC`,
-    [userId]
+      `SELECT pr.*, ep.client_name, ep.event_type 
+      FROM payment_reminders pr
+      JOIN event_plans ep ON pr.event_id = ep.id
+      WHERE ep.user_id = $1 
+        AND pr.status = 'pending'
+        AND pr.sent_at IS NOT NULL
+        AND pr.client_name IS NOT NULL
+      ORDER BY pr.sent_at DESC`,
+      [numericUserId]
     );
 
     res.json({ 
-    success: true, 
-    reminders: result.rows 
+      success: true, 
+      reminders: result.rows 
     });
-} catch (err) {
+  } catch (err) {
     console.error("❌ Get reminders error:", err);
     res.status(500).json({ error: "Failed to fetch reminders" });
-}
+  }
 });
 
 // ================ //
 // GET A SINGLE EVENT PLAN
 // ================ //
-router.get('/:id', verifMobileAuth, async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
+        const numericUserId = req.user.mobile_id; // Use integer ID
         
         const result = await pool.query(
             'SELECT * FROM event_plans WHERE id = $1 AND user_id = $2',
-            [id, req.user.id]
+            [id, numericUserId]
         );
 
         if (result.rows.length === 0) {
@@ -395,21 +433,19 @@ router.get('/:id', verifMobileAuth, async (req, res) => {
 // ================ //
 // DELETE AN EVENT
 // ================ //
-router.delete('/:id', verifMobileAuth, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-        const user_id = req.user.id;
+        const numericUserId = req.user.mobile_id; // Use integer ID
 
         await client.query('BEGIN');
 
-        // First delete all guests for this event
         await client.query('DELETE FROM event_guests WHERE event_plan_id = $1', [id]);
 
-        // Then delete the main event plan
         const result = await client.query(
             'DELETE FROM event_plans WHERE id = $1 AND user_id = $2 RETURNING *',
-            [id, user_id]
+            [id, numericUserId]
         );
 
         await client.query('COMMIT');
@@ -436,29 +472,85 @@ router.put('/:id/status', async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
 
-        console.log(`Updating event ${id} status to: ${status}`);
+        console.log(`🔄 UPDATING EVENT ${id} STATUS TO: ${status}`);
 
         const validStatuses = ['Pending', 'Approved', 'Rejected', 'Completed'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ error: 'Invalid status' });
         }
 
-        const result = await pool.query(
-            'UPDATE event_plans SET status = $1 WHERE id = $2 RETURNING *',
-            [status, id]
+        // Get event with user info
+        const currentEvent = await pool.query(
+            `SELECT 
+                ep.id,
+                ep.status as old_status,
+                ep.user_id,
+                ep.client_name,
+                ep.event_type,
+                ep.event_date,
+                mu.auth_uid as user_uuid  // ← THIS MUST BE auth_uid
+             FROM event_plans ep
+             LEFT JOIN mobile_users mu ON ep.user_id = mu.id
+             WHERE ep.id = $1`,
+            [id]
         );
 
-        if (result.rows.length === 0) {
+        if (currentEvent.rows.length === 0) {
             return res.status(404).json({ error: 'Event plan not found' });
         }
 
+        const event = currentEvent.rows[0];
+        
+        // Update the status
+        await pool.query(
+            'UPDATE event_plans SET status = $1 WHERE id = $2',
+            [status, id]
+        );
+
+        // ✅ FIXED: Send notification with proper user UUID
+        if (event.old_status !== status && event.user_uuid) {
+            console.log('📤 Sending notification to user UUID:', event.user_uuid);
+            
+            const notificationData = {
+                user_uuid: event.user_uuid,
+                type: 'EVENT_STATUS_UPDATE', // Consistent type
+                title: `Event ${status}!`,
+                message: `Your event "${event.client_name}" has been ${status.toLowerCase()}.`,
+                data: {
+                    eventId: parseInt(id),
+                    eventName: event.client_name,
+                    oldStatus: event.old_status,
+                    newStatus: status,
+                    eventType: event.event_type,
+                    eventDate: event.event_date
+                },
+                is_read: false,
+                created_at: new Date().toISOString()
+            };
+
+            const { data: notifData, error: notifError } = await supabase
+                .from('notifications')
+                .insert([notificationData])
+                .select();
+
+            if (notifError) {
+                console.error('❌ Notification error:', notifError);
+            } else {
+                console.log('✅ Notification sent:', notifData[0]?.id);
+            }
+        }
+
         res.json({
+            success: true,
             message: `Event status updated to ${status}`,
             status: status
         });
     } catch (error) {
-        console.error('Error updating event status:', error);
-        res.status(500).json({ error: 'Server error while updating event status' });
+        console.error('❌ ERROR UPDATING EVENT STATUS:', error);
+        res.status(500).json({ 
+            error: 'Server error while updating event status',
+            details: error.message 
+        });
     }
 });
 
@@ -1087,7 +1179,8 @@ router.post('/invitation/:eventId/:guestId/:token/respond', async (req, res) => 
 
     console.log('🔢 Converted IDs:', { numericEventId, numericGuestId });
 
-    const result = await pool.query(
+    // 1. FIRST UPDATE THE GUEST'S RSVP STATUS
+    const updateResult = await pool.query(
       `UPDATE event_guests 
        SET status = $1, responded_at = NOW()
        WHERE id = $2 AND event_plan_id = $3 AND invite_token = $4
@@ -1095,43 +1188,58 @@ router.post('/invitation/:eventId/:guestId/:token/respond', async (req, res) => 
       [status, numericGuestId, numericEventId, token]
     );
 
-    console.log('📊 Update result:', result.rows);
+    console.log('📊 Update result:', updateResult.rows);
 
-    if (result.rows.length === 0) {
+    if (updateResult.rows.length === 0) {
       console.log('❌ No rows updated - invalid invitation');
       return res.status(404).json({ error: "Invalid invitation link" });
     }
 
-    const guest = result.rows[0];
-    
-    // ✅ CREATE NOTIFICATION FOR CLIENT ABOUT RSVP
+    const guest = updateResult.rows[0];
+
+    // 2. GET EVENT DETAILS WITH USER UUID FOR NOTIFICATION
     const eventResult = await pool.query(
-      `SELECT user_uuid, client_name FROM event_plans WHERE id = $1`,
+      `SELECT 
+        ep.user_id,
+        mu.auth_uid as user_uuid,  // ← THIS MUST BE auth_uid
+        CONCAT(mu.first_name, ' ', mu.last_name) AS user_name 
+       FROM event_plans ep
+       LEFT JOIN mobile_users mu ON ep.user_id = mu.id
+       WHERE ep.id = $1`,
       [numericEventId]
     );
-    
+
+    console.log('📋 Event result:', eventResult.rows);
+
     if (eventResult.rows.length > 0) {
       const event = eventResult.rows[0];
       
-      await supabase
-        .from('notifications')
-        .insert([
-          {
-            user_uuid: event.user_id,
-            type: 'GUEST_RSVP',
-            title: 'Guest RSVP Update',
-            message: `${guest.guest_name} has ${status.toLowerCase()} your invitation`,
-            data: {
-              eventId: numericEventId,
-              guestId: numericGuestId,
-              guestName: guest.guest_name,
-              status: status,
-              eventName: event.client_name
-            },
-            is_read: false,
-            created_at: new Date().toISOString()
-          }
-        ]);
+      // ✅ FIX: Use the user_uuid from the joined mobile_users table
+      if (event.user_uuid) {
+        await supabase
+          .from('notifications')
+          .insert([
+            {
+              user_uuid: event.user_uuid,  // This is the correct UUID
+              type: 'GUEST_RSVP',
+              title: 'Guest RSVP Update',
+              message: `${guest.guest_name} has ${status.toLowerCase()} your invitation`,
+              data: {
+                eventId: numericEventId,
+                guestId: numericGuestId,
+                guestName: guest.guest_name,
+                status: status,
+                eventName: event.client_name
+              },
+              is_read: false,
+              created_at: new Date().toISOString()
+            }
+          ]);
+        
+        console.log('✅ Notification sent to user UUID:', event.user_uuid);
+      } else {
+        console.log('⚠️ No user UUID found for event owner');
+      }
     }
 
     console.log('✅ RSVP updated successfully');

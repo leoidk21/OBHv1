@@ -1,30 +1,40 @@
+// notifications.js - FIXED VERSION
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { authenticateToken } = require('./middleware/mobile-auth');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ================ //
-// GET ADMIN NOTIFICATIONS
+// GET MOBILE USER NOTIFICATIONS
 // ================ //
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const adminId = req.user.id;
+        const userUuid = req.user.id;
         
-        console.log('📢 Fetching notifications for admin ID:', adminId);
+        console.log('Fetching notifications for user UUID:', userUuid);
         
-        const result = await pool.query(
-            `SELECT * FROM notifications 
-             WHERE user_id = $1 
-             ORDER BY created_at DESC 
-             LIMIT 50`,
-            [adminId]
-        );
+        const { data: notifications, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_uuid', userUuid)
+            .order('created_at', { ascending: false })
+            .limit(50);
 
-        console.log(`✅ Found ${result.rows.length} notifications for admin ${adminId}`);
+        if (error) {
+            console.error('Get notifications error:', error);
+            return res.status(500).json({ error: 'Failed to get notifications' });
+        }
+
+        console.log(`Found ${notifications?.length || 0} notifications`);
 
         res.json({
             success: true,
-            notifications: result.rows
+            notifications: notifications || []
         });
     } catch (error) {
         console.error('Get notifications error:', error);
@@ -38,13 +48,20 @@ router.get('/', authenticateToken, async (req, res) => {
 router.put('/:id/read', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
+        const userUuid = req.user.id;
         
-        console.log('📢 Marking notification as read:', id);
+        console.log('Marking notification as read:', id);
         
-        await pool.query(
-            `UPDATE notifications SET is_read = true WHERE id = $1`,
-            [id]
-        );
+        const { error } = await supabase
+            .from('notifications')
+            .update({ is_read: true, read_at: new Date().toISOString() })
+            .eq('id', id)
+            .eq('user_uuid', userUuid);
+
+        if (error) {
+            console.error('Mark notification read error:', error);
+            return res.status(500).json({ error: 'Failed to mark notification as read' });
+        }
 
         res.json({ success: true });
     } catch (error) {
@@ -58,19 +75,53 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
 // ================ //
 router.put('/mark-all-read', authenticateToken, async (req, res) => {
     try {
-        const adminId = req.user.id;
+        const userUuid = req.user.id;
         
-        console.log('📢 Marking all notifications as read for admin:', adminId);
+        console.log('Marking all notifications as read for user:', userUuid);
         
-        await pool.query(
-            `UPDATE notifications SET is_read = true WHERE user_id = $1`,
-            [adminId]
-        );
+        const { error } = await supabase
+            .from('notifications')
+            .update({ is_read: true, read_at: new Date().toISOString() })
+            .eq('user_uuid', userUuid)
+            .eq('is_read', false);
+
+        if (error) {
+            console.error('Mark all read error:', error);
+            return res.status(500).json({ error: 'Failed to mark all as read' });
+        }
 
         res.json({ success: true });
     } catch (error) {
         console.error('Mark all read error:', error);
         res.status(500).json({ error: 'Failed to mark all as read' });
+    }
+});
+
+// ================ //
+// GET UNREAD NOTIFICATION COUNT
+// ================ //
+router.get('/unread-count', authenticateToken, async (req, res) => {
+    try {
+        const userUuid = req.user.id;
+        
+        const { count, error } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_uuid', userUuid)
+            .eq('is_read', false);
+
+        if (error) {
+            console.error('Unread count error:', error);
+            return res.status(500).json({ error: 'Failed to get unread count' });
+        }
+
+        res.json({
+            success: true,
+            unreadCount: count || 0
+        });
+    } catch (error) {
+        console.error('Unread count error:', error);
+        res.status(500).json({ error: 'Failed to get unread count' });
     }
 });
 

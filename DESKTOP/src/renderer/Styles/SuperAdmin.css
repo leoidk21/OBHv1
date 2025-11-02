@@ -198,10 +198,20 @@ p, h1, h2, h3, h4, h5, h6 {
     background: #0056b3;
 }
 
+.logsTableBody {
+    background-color: red;
+}
+
 .logs-table {
     width: 100%;
     margin-top: 10px;
+    border-radius: 10px;
     border-collapse: collapse;
+}
+
+.logs-table td {
+    border-radius: 10px;
+    border: 1px solid #ddd;
 }
 
 .logs-table th, .logs-table td {

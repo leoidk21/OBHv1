@@ -2,9 +2,175 @@ if (window.__LandingPageModuleInstance) {
     console.log("LandingPageModule already loaded – reusing existing instance");
     window.LandingPageModule = window.__LandingPageModuleInstance;
 } else {
+    // ============================================
+    // ADD ADMIN LOGGER TO LANDING PAGE
+    // ============================================
+    if (!window.AdminLogger) {
+    console.log("🔄 Loading AdminLogger for Landing Page...");
+    window.AdminLogger = {
+        API_BASE: "https://vxukqznjkdtuytnkhldu.supabase.co/rest/v1",
+        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA",
+
+        /**
+         * Get current admin ID
+         */
+        async getCurrentAdminId() {
+            try {
+                console.log("🔍 Getting admin ID from Landing Page...");
+                
+                // Method 1: Get from Supabase session
+                if (window.supabase && window.supabase.auth) {
+                    const { data: { session }, error } = await window.supabase.auth.getSession();
+                    if (!error && session?.user?.id) {
+                        console.log("✅ Using admin ID from session:", session.user.id);
+                        return session.user.id;
+                    }
+                }
+
+                // Method 2: Get from localStorage
+                const adminData = localStorage.getItem("adminData");
+                if (adminData) {
+                    try {
+                        const admin = JSON.parse(adminData);
+                        if (admin.id) {
+                            console.log("✅ Using admin ID from localStorage:", admin.id);
+                            return admin.id;
+                        }
+                    } catch (e) {
+                        console.error("Error parsing adminData:", e);
+                    }
+                }
+
+                // Method 3: Lookup by email
+                const adminEmail = localStorage.getItem("adminEmail") || 
+                                 (adminData ? JSON.parse(adminData).email : null);
+                
+                if (adminEmail) {
+                    console.log("🔍 Looking up admin ID by email:", adminEmail);
+                    const adminId = await this.lookupAdminIdByEmail(adminEmail);
+                    if (adminId) {
+                        console.log("✅ Found admin ID by email:", adminId);
+                        return adminId;
+                    }
+                }
+
+                console.warn("⚠️ No admin ID found in Landing Page");
+                return null;
+
+            } catch (error) {
+                console.error("❌ Error getting admin ID:", error);
+                return null;
+            }
+        },
+
+        /**
+         * Lookup admin ID by email
+         */
+        async lookupAdminIdByEmail(email) {
+            try {
+                const response = await fetch(
+                    `${this.API_BASE}/admin_profiles?email=eq.${encodeURIComponent(email)}&select=id`,
+                    {
+                        headers: {
+                            'apikey': this.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                            "Content-Type": "application/json"
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        return data[0].id;
+                    }
+                }
+                return null;
+            } catch (error) {
+                console.error("Error looking up admin ID by email:", error);
+                return null;
+            }
+        },
+
+        /**
+         * Log admin action to database
+         */
+        async logAction(action, targetPage, details = {}) {
+            try {
+                console.log(`📝 Landing Page - Logging: ${action} on ${targetPage}`, details);
+                
+                const adminId = await this.getCurrentAdminId();
+                
+                if (!adminId) {
+                    console.warn("⚠️ Cannot log action: No admin ID");
+                    this.storeLogLocally(action, targetPage, details);
+                    return { success: false, error: "No admin ID" };
+                }
+
+                const logEntry = {
+                    admin_id: adminId,
+                    action: action,
+                    target_page: targetPage,
+                    details: details,
+                    timestamp: new Date().toISOString()
+                };
+
+                console.log("📝 Log entry:", logEntry);
+
+                const response = await fetch(`${this.API_BASE}/admin_logs`, {
+                    method: "POST",
+                    headers: {
+                        'apikey': this.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=representation"
+                    },
+                    body: JSON.stringify([logEntry])
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log("✅ Action logged successfully:", data);
+                return { success: true, data };
+
+            } catch (error) {
+                console.error("❌ Failed to log action:", error);
+                this.storeLogLocally(action, targetPage, details);
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * Store log locally as fallback
+         */
+        storeLogLocally(action, targetPage, details) {
+            try {
+                const logs = JSON.parse(localStorage.getItem('pending_admin_logs') || '[]');
+                logs.push({
+                    action,
+                    targetPage,
+                    details,
+                    timestamp: new Date().toISOString(),
+                    admin_id: localStorage.getItem("adminData") ? JSON.parse(localStorage.getItem("adminData")).id : 'unknown'
+                });
+                localStorage.setItem('pending_admin_logs', JSON.stringify(logs));
+                console.log("💾 Log stored locally for later sync");
+            } catch (error) {
+                console.error("Failed to store log locally:", error);
+            }
+        }
+    };
+    console.log("✅ AdminLogger loaded for Landing Page");
+}
+
     window.LandingPageModule = (function () {
         const API_BASE = "https://vxukqznjkdtuytnkhldu.supabase.co/rest/v1";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA";
+        
         let allEvents = [];
         let dashboardStats = null;
         let currentEventId = null;
@@ -567,12 +733,62 @@ if (window.__LandingPageModuleInstance) {
         // APPROVE EVENT - SUPABASE VERSION
         // ============================================
         async function approveEvent() {
-        if (!currentEventId) {
-            showNotification("No event selected", "error");
-            return;
-        }
+            if (!currentEventId) {
+                showNotification("No event selected", "error");
+                return;
+            }
 
-        try {
+            try {
+                console.log("🚀 ========== APPROVE EVENT START ==========");
+                
+                // Get event details
+                const eventToApprove = allEvents.find(e => e.id === currentEventId);
+                console.log("📋 Event to approve:", eventToApprove);
+                
+                // DEBUG: Check current admin context in REGULAR admin panel
+                console.log("🔍 === REGULAR ADMIN PANEL DEBUG ===");
+                
+                // 1. Check Supabase session
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                console.log("🔍 Supabase session:", session);
+                console.log("🔍 Session error:", sessionError);
+                
+                // 2. Check localStorage
+                console.log("🔍 localStorage adminData:", localStorage.getItem("adminData"));
+                console.log("🔍 localStorage token:", localStorage.getItem("token"));
+                
+                // 3. Test AdminLogger directly
+                console.log("🔍 Testing AdminLogger.getCurrentAdminId()...");
+                const adminId = await AdminLogger.getCurrentAdminId();
+                console.log("🔍 AdminLogger returned ID:", adminId);
+                
+                if (adminId) {
+                    const { data: adminProfile } = await supabase
+                        .from('admin_profiles')
+                        .select('id, email, first_name, last_name')
+                        .eq('id', adminId)
+                        .single();
+                    console.log("🔍 Corresponding admin profile:", adminProfile);
+                }
+                
+                // 4. Test direct log creation
+                console.log("🔍 Testing direct log creation...");
+                const testLogResult = await AdminLogger.logAction('debug_approve', 'Landing Page', {
+                    debug: true,
+                    event_id: currentEventId,
+                    testing: "direct_log_test",
+                    timestamp: new Date().toISOString()
+                });
+                console.log("🔍 Direct log test result:", testLogResult);
+
+                // If direct log test failed, stop here
+                if (!testLogResult.success) {
+                    throw new Error(`Logging test failed: ${testLogResult.error}`);
+                }
+
+                console.log("✅ Logging test passed, proceeding with approval...");
+
+                // Proceed with actual approval
                 const response = await fetch(
                     `${API_BASE}/event_plans?id=eq.${currentEventId}`,
                     {
@@ -598,14 +814,31 @@ if (window.__LandingPageModuleInstance) {
                 const data = await response.json();
 
                 if (data && data.length > 0) {
-                    showNotification("Event approved successfully", "success");
+                    // LOG THE ACTUAL APPROVAL ACTION
+                    console.log("📝 Logging actual approval action...");
+                    const logResult = await AdminLogger.logAction('approve', 'Landing Page', {
+                        event_id: currentEventId,
+                        event_name: eventToApprove?.event_type || 'Unknown Event',
+                        client_name: eventToApprove?.client_name || 'Unknown Client',
+                        event_date: eventToApprove?.event_date,
+                        approved_at: new Date().toISOString()
+                    });
                     
-                    // Update local cache
+                    console.log("📝 Final log result:", logResult);
+
+                    if (!logResult.success) {
+                        console.error("❌ APPROVAL ACTION LOGGING FAILED:", logResult.error);
+                        // Continue with approval but show warning
+                        showNotification("Event approved but failed to log action", "warning");
+                    } else {
+                        showNotification("Event approved successfully", "success");
+                    }
+                    
+                    // Update cache and UI
                     const updatedEvent = data[0];
                     const index = allEvents.findIndex(e => e.id === currentEventId);
                     if (index !== -1) {
                         allEvents[index] = updatedEvent;
-                        // Update both storage methods
                         localStorage.setItem("cachedEvents", JSON.stringify(allEvents));
                         if (window.store) {
                             window.store.set("events", allEvents);
@@ -615,11 +848,13 @@ if (window.__LandingPageModuleInstance) {
                     closeModal();
                     await loadEvents(true);
                     await loadDashboardStats(true);
+                    
+                    console.log("✅ ========== APPROVE EVENT COMPLETE ==========");
                 } else {
                     throw new Error("No data returned from server");
                 }
             } catch (error) {
-                console.error("Error approving event:", error);
+                console.error("❌ Approve event error:", error);
                 showNotification("Failed to approve event: " + error.message, "error");
             }
         }

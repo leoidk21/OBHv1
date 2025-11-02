@@ -1,3 +1,4 @@
+// Notification.tsx - FIXED VERSION
 import React, { useState, useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,9 +9,50 @@ import colors from "../config/colors";
 import NavigationSlider from './ReusableComponents/NavigationSlider';
 import MenuBar from "./ReusableComponents/MenuBar";
 import { useNotifications } from '../../context/NotificationContext';
+import { useEvent } from '../../context/EventContext';
+import { supabase } from "../../lib/supabase";
 
 const Notification = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, refreshNotifications, loading } = useNotifications();
+  const eventContext = useEvent();
+
+  useEffect(() => {
+    console.log('🎯 NOTIFICATION SCREEN - CLEAN DEBUG:');
+    console.log('   User ID from context:', eventContext.userId);
+    console.log('   Notifications count:', notifications.length);
+    console.log('   Unread count:', unreadCount);
+    console.log('   Loading:', loading);
+    
+    // Safe log of eventContext without large data
+    if (eventContext.eventData) {
+      console.log('   Event Data (clean):', {
+        event_type: eventContext.eventData.event_type,
+        client_name: eventContext.eventData.client_name,
+        event_date: eventContext.eventData.eventDate,
+        budget_length: eventContext.eventData.budget?.length || 0,
+        guests_length: eventContext.eventData.guests?.length || 0,
+        has_eSignature: !!eventContext.eventData.eSignature,
+        eSignature_length: eventContext.eventData.eSignature?.length || 0
+      });
+    }
+    
+    notifications.forEach((notif, index) => {
+      console.log(`   📄 Notification ${index + 1}:`, {
+        id: notif.id,
+        user_uuid: notif.user_uuid,
+        type: notif.type,
+        title: notif.title,
+        is_read: notif.is_read
+      });
+    });
+  }, [notifications, unreadCount, loading, eventContext]);
+
+  // Test function
+  const testNotificationConnection = () => {
+    console.log('🧪 Testing notification connection...');
+    console.log('   Current User ID:', eventContext.userId);
+    refreshNotifications();
+  };
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -49,6 +91,35 @@ const Notification = () => {
     return groups;
   }, {});
 
+  const testDatabaseQuery = async () => {
+  try {
+    console.log('🧪 Testing direct database query...');
+    
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_uuid', 'ab171470-b862-41cf-a3a6-1c63165836d4')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Direct query error:', error);
+    } else {
+      console.log(`✅ Direct query found ${data.length} notifications`);
+      data.forEach((notif, index) => {
+        console.log(`   Notification ${index + 1}:`, {
+          id: notif.id,
+          type: notif.type,
+          title: notif.title,
+          created_at: notif.created_at,
+          is_read: notif.is_read
+        });
+      });
+    }
+  } catch (error) {
+    console.error('❌ Test query error:', error);
+  }
+};
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1 }}>
@@ -57,7 +128,14 @@ const Notification = () => {
           <View>
             <NavigationSlider headerTitle="Notification" />
           </View>
-          {/* HEADER */}
+
+          {/* TEST BUTTON - Remove after testing */}
+          <TouchableOpacity 
+            style={styles.testButton}
+            onPress={testNotificationConnection}
+          >
+            <Text style={styles.testButtonText}>Test Connection</Text>
+          </TouchableOpacity>
 
           {/* MARK ALL AS READ BUTTON */}
           {unreadCount > 0 && (
@@ -69,7 +147,14 @@ const Notification = () => {
             </TouchableOpacity>
           )}
 
-          {/* ===== CONTENT ===== */}
+          <TouchableOpacity 
+            style={styles.testButton}
+            onPress={testDatabaseQuery}
+          >
+            <Text style={styles.testButtonText}>Test DB Query</Text>
+          </TouchableOpacity>
+
+          {/* CONTENT */}
           <ScrollView style={styles.container}>
             {Object.keys(groupedNotifications).map((date) => (
               <View key={date}>
@@ -88,11 +173,7 @@ const Notification = () => {
                   >
                     <View style={styles.notifCardImageContainer}>
                       <Image
-                        source={
-                          notification.type === 'PAYMENT_REMINDER' 
-                            ? require("../../assets/notif.png")
-                            : require("../../assets/notif.png")
-                        }
+                        source={require("../../assets/notif.png")}
                         style={styles.notifCardImage}
                         resizeMode="contain"
                       />
@@ -102,7 +183,6 @@ const Notification = () => {
                       <Text style={styles.notifCardText}>{notification.title}</Text>
                       <Text style={styles.notifCardSubText}>{notification.message}</Text>
                       
-                      {/* Payment Reminder Specific Details */}
                       {notification.type === 'PAYMENT_REMINDER' && notification.data && (
                         <View style={styles.paymentDetails}>
                           <Text style={styles.paymentText}>
@@ -121,7 +201,6 @@ const Notification = () => {
                         </View>
                       )}
                       
-                      {/* Event Status Specific Details */}
                       {notification.type === 'EVENT_STATUS_UPDATE' && notification.data?.remarks && (
                         <Text style={styles.remarksText}>
                           Remarks: {notification.data.remarks}
@@ -134,7 +213,7 @@ const Notification = () => {
                       </Text>
                     </View>
                   </TouchableOpacity>
-              ))}
+                ))}
               </View>
             ))}
 
@@ -153,7 +232,6 @@ const Notification = () => {
               </View>
             )}
           </ScrollView>
-          {/* ===== CONTENT ===== */}
         </LinearGradient>
         <MenuBar activeScreen={"Notification"} />
       </SafeAreaView>
@@ -161,143 +239,139 @@ const Notification = () => {
   );
 };
 
+// Add test button styles
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    flexGrow: 1,
-    paddingBottom: hp("20%"),
-  },  
-
-  markAllButton: {
-    backgroundColor: colors.brown,
+  testButton: {
+    backgroundColor: '#007AFF',
     padding: 10,
-    margin: 15,
+    margin: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
-  
-  markAllText: {
+  testButtonText: {
     color: 'white',
     fontWeight: 'bold',
   },
-  
-  notificationHeader: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#f5f5f5',
+  markAllButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
   },
-  
+  markAllText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  notificationHeader: {
+    paddingVertical: 8,
+    marginTop: 16,
+  },
   notificationHeaderText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#666',
   },
-  
   notifCard: {
     flexDirection: 'row',
-    padding: 15,
     backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    alignItems: 'center',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  
   unreadCard: {
-    backgroundColor: '#f8f9fa',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
   },
-  
   notifCardImageContainer: {
     position: 'relative',
     marginRight: 12,
   },
-  
   notifCardImage: {
     width: 40,
     height: 40,
   },
-  
   unreadDot: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
     backgroundColor: '#FF3B30',
-    borderRadius: 4,
+    borderRadius: 6,
   },
-  
   notifContent: {
     flex: 1,
   },
-  
   notifCardText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 4,
   },
-  
   notifCardSubText: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  
+  paymentDetails: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+  },
+  paymentText: {
+    fontSize: 12,
+    color: '#333',
+    marginBottom: 2,
+  },
   remarksText: {
     fontSize: 12,
-    color: '#888',
     fontStyle: 'italic',
+    color: '#666',
+    marginTop: 4,
   },
-  
   timeContainer: {
-    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
-  
   timeText: {
     fontSize: 12,
     color: '#999',
   },
-  
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    justifyContent: 'center',
+    paddingVertical: 60,
   },
-  
   emptyStateText: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#666',
     marginBottom: 8,
   },
-  
   emptyStateSubText: {
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
   },
-  
   loadingState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    justifyContent: 'center',
+    paddingVertical: 40,
   },
-  
   loadingText: {
     fontSize: 16,
     color: '#666',
-  },
-  
-  paymentText: {
-    fontSize: 12,
-    color: '#888',
-  },
-  
-  paymentDetails: {
-    padding: 4,
-    marginTop: 4,
   },
 });
 

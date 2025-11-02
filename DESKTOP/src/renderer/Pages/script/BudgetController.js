@@ -1,5 +1,170 @@
 console.log("BudgetController initialized!");
 
+// ============================================
+// ADD ADMIN LOGGER TO BUDGET CONTROLLER
+// ============================================
+if (!window.AdminLogger) {
+    console.log("🔄 Loading AdminLogger for Budget Controller...");
+    window.AdminLogger = {
+        API_BASE: "https://vxukqznjkdtuytnkhldu.supabase.co/rest/v1",
+        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA",
+
+        /**
+         * Get current admin ID
+         */
+        async getCurrentAdminId() {
+            try {
+                console.log("🔍 Getting admin ID from Budget Controller...");
+                
+                // Method 1: Get from Supabase session
+                if (window.supabase && window.supabase.auth) {
+                    const { data: { session }, error } = await window.supabase.auth.getSession();
+                    if (!error && session?.user?.id) {
+                        console.log("✅ Using admin ID from session:", session.user.id);
+                        return session.user.id;
+                    }
+                }
+
+                // Method 2: Get from localStorage
+                const adminData = localStorage.getItem("adminData");
+                if (adminData) {
+                    try {
+                        const admin = JSON.parse(adminData);
+                        if (admin.id) {
+                            console.log("✅ Using admin ID from localStorage:", admin.id);
+                            return admin.id;
+                        }
+                    } catch (e) {
+                        console.error("Error parsing adminData:", e);
+                    }
+                }
+
+                // Method 3: Lookup by email
+                const adminEmail = localStorage.getItem("adminEmail") || 
+                                 (adminData ? JSON.parse(adminData).email : null);
+                
+                if (adminEmail) {
+                    console.log("🔍 Looking up admin ID by email:", adminEmail);
+                    const adminId = await this.lookupAdminIdByEmail(adminEmail);
+                    if (adminId) {
+                        console.log("✅ Found admin ID by email:", adminId);
+                        return adminId;
+                    }
+                }
+
+                console.warn("⚠️ No admin ID found in Budget Controller");
+                return null;
+
+            } catch (error) {
+                console.error("❌ Error getting admin ID:", error);
+                return null;
+            }
+        },
+
+        /**
+         * Lookup admin ID by email
+         */
+        async lookupAdminIdByEmail(email) {
+            try {
+                const response = await fetch(
+                    `${this.API_BASE}/admin_profiles?email=eq.${encodeURIComponent(email)}&select=id`,
+                    {
+                        headers: {
+                            'apikey': this.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                            "Content-Type": "application/json"
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        return data[0].id;
+                    }
+                }
+                return null;
+            } catch (error) {
+                console.error("Error looking up admin ID by email:", error);
+                return null;
+            }
+        },
+
+        /**
+         * Log admin action to database
+         */
+        async logAction(action, targetPage, details = {}) {
+            try {
+                console.log(`📝 Budget Controller - Logging: ${action} on ${targetPage}`, details);
+                
+                const adminId = await this.getCurrentAdminId();
+                
+                if (!adminId) {
+                    console.warn("⚠️ Cannot log action: No admin ID");
+                    this.storeLogLocally(action, targetPage, details);
+                    return { success: false, error: "No admin ID" };
+                }
+
+                const logEntry = {
+                    admin_id: adminId,
+                    action: action,
+                    target_page: targetPage,
+                    details: details,
+                    timestamp: new Date().toISOString()
+                };
+
+                console.log("📝 Log entry:", logEntry);
+
+                const response = await fetch(`${this.API_BASE}/admin_logs`, {
+                    method: "POST",
+                    headers: {
+                        'apikey': this.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=representation"
+                    },
+                    body: JSON.stringify([logEntry])
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log("✅ Action logged successfully:", data);
+                return { success: true, data };
+
+            } catch (error) {
+                console.error("❌ Failed to log action:", error);
+                this.storeLogLocally(action, targetPage, details);
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * Store log locally as fallback
+         */
+        storeLogLocally(action, targetPage, details) {
+            try {
+                const logs = JSON.parse(localStorage.getItem('pending_admin_logs') || '[]');
+                logs.push({
+                    action,
+                    targetPage,
+                    details,
+                    timestamp: new Date().toISOString(),
+                    admin_id: localStorage.getItem("adminData") ? JSON.parse(localStorage.getItem("adminData")).id : 'unknown'
+                });
+                localStorage.setItem('pending_admin_logs', JSON.stringify(logs));
+                console.log("💾 Log stored locally for later sync");
+            } catch (error) {
+                console.error("Failed to store log locally:", error);
+            }
+        }
+    };
+    console.log("✅ AdminLogger loaded for Budget Controller");
+}
+
 class BudgetController {
     constructor() {
         console.log("BudgetController initialized!");
@@ -234,7 +399,6 @@ class BudgetController {
 
             console.log("🔄 Inserting reminder into payment_reminders...");
             
-            // Match the exact schema of payment_reminders table
             const reminderData = {
                 event_id: parseInt(eventId),
                 client_name: clientName,
@@ -253,6 +417,18 @@ class BudgetController {
             });
 
             console.log("✅ Reminder stored in payment_reminders:", data);
+
+            // 🔥 LOG THE REMINDER ACTION
+            console.log("📝 Logging reminder action...");
+            const logResult = await AdminLogger.logAction('reminder', 'Budget Page', {
+                event_id: eventId,
+                client_name: clientName,
+                reminder_type: 'payment_reminder',
+                notes: notes,
+                sent_at: new Date().toISOString()
+            });
+            
+            console.log("📝 Admin log result:", logResult);
 
             // Show success message
             form.style.display = "none";
@@ -274,34 +450,27 @@ class BudgetController {
             
         } catch (error) {
             console.error("❌ Error sending reminder:", error);
-            console.error("Error details:", error.message);
             
-            // Fallback: Store locally and show success
+            // 🔥 LOG THE FAILED ATTEMPT
+            console.log("📝 Logging failed reminder action...");
+            const logResult = await AdminLogger.logAction('reminder_failed', 'Budget Page', {
+                event_id: eventId,
+                client_name: clientName,
+                error: error.message,
+                attempted_at: new Date().toISOString()
+            });
+            
+            // Store locally as fallback
             this.storeReminderLocally(eventId, clientName, notes);
-            
-            if (form && successMsg) {
-                form.style.display = "none";
-                successMsg.style.display = "block";
-                
-                setTimeout(() => {
-                    const modal = document.getElementById("send-reminder-modal");
-                    if (modal) modal.style.display = "none";
-                    form.style.display = "block";
-                    successMsg.style.display = "none";
-                    form.querySelector('.reminder-notes').value = '';
-                }, 3000);
-            }
-            
             this.showSuccess("Reminder stored locally! Will sync when available.");
             
         } finally {
-            // Reset button state only if submitBtn exists
             if (submitBtn) {
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
             }
         }
-   }
+    }
 
     fallbackSendReminder(eventId, clientName, notes, submitBtn, originalText) {
         const form = document.getElementById("sendReminderForm");
@@ -491,11 +660,15 @@ class BudgetController {
     }
 
     setupEventListeners() {
+    // Use event delegation with better filtering
         document.addEventListener('click', (e) => {
-            console.log("🖱️ Clicked:", e.target.className, "ID:", e.target.id);
+            console.log("🖱️ Clicked:", e.target.className, "ID:", e.target.id, "Tag:", e.target.tagName);
 
-            // Open modal button (table buttons)
+            // Handle send reminder button clicks
             if (e.target.classList.contains('send-reminder-btn') && !e.target.id) {
+                // Prevent multiple handlers
+                e.stopPropagation();
+                
                 const eventId = e.target.dataset.eventId;
                 const clientName = e.target.dataset.clientName;
                 
@@ -508,18 +681,28 @@ class BudgetController {
                 }
                 
                 modal.style.display = "flex";
-                budgetController.currentReminderEvent = { eventId, clientName };
+                this.currentReminderEvent = { eventId, clientName };
             }
 
-            // Send reminder form submission (modal button ONLY)
-            if (e.target.id === "submitReminderBtn") {
+            // Handle form submission - ONLY the submit button
+            if (e.target.id === "submitReminderBtn" && e.target.type === "submit") {
                 e.preventDefault();
-                console.log("📤 Submit button clicked");
-                if (budgetController.currentReminderEvent) {
-                    budgetController.sendReminder(
-                        budgetController.currentReminderEvent.eventId, 
-                        budgetController.currentReminderEvent.clientName
-                    );
+                e.stopPropagation(); // Prevent event bubbling
+                
+                console.log("📤 Submit button clicked - SINGLE HANDLER");
+                if (this.currentReminderEvent) {
+                    // Add a small delay to prevent double execution
+                    if (!this.isSendingReminder) {
+                        this.isSendingReminder = true;
+                        this.sendReminder(
+                            this.currentReminderEvent.eventId, 
+                            this.currentReminderEvent.clientName
+                        ).finally(() => {
+                            this.isSendingReminder = false;
+                        });
+                    } else {
+                        console.log("🔄 Reminder already being sent, ignoring duplicate click");
+                    }
                 } else {
                     console.log("❌ No reminder event data");
                 }
@@ -527,53 +710,53 @@ class BudgetController {
         });
     }
 
-showCategoriesModal(eventId) {
-    const event = this.events.find(e => e.id == eventId);
-    if (!event) return;
+    showCategoriesModal(eventId) {
+        const event = this.events.find(e => e.id == eventId);
+        if (!event) return;
 
-    const modal = document.getElementById("categories-modal");
-    const categoriesBody = document.getElementById("categories-modal-body");
-    
-    if (!modal || !categoriesBody) return;
+        const modal = document.getElementById("categories-modal");
+        const categoriesBody = document.getElementById("categories-modal-body");
+        
+        if (!modal || !categoriesBody) return;
 
-    // Populate categories
-    if (!event.expenses || event.expenses.length === 0) {
-        categoriesBody.innerHTML = '<p class="no-categories">No expenses recorded for this event</p>';
-    } else {
-        categoriesBody.innerHTML = event.expenses.map((expense, index) => {
-            const amount = this.formatCurrency(expense.amount);
-            const statusClass = `status-${expense.status?.toLowerCase() || 'pending'}`;
-            const statusText = expense.status
-            ? expense.status.charAt(0).toUpperCase() + expense.status.slice(1)
-            : 'Pending';
+        // Populate categories
+        if (!event.expenses || event.expenses.length === 0) {
+            categoriesBody.innerHTML = '<p class="no-categories">No expenses recorded for this event</p>';
+        } else {
+            categoriesBody.innerHTML = event.expenses.map((expense, index) => {
+                const amount = this.formatCurrency(expense.amount);
+                const statusClass = `status-${expense.status?.toLowerCase() || 'pending'}`;
+                const statusText = expense.status
+                ? expense.status.charAt(0).toUpperCase() + expense.status.slice(1)
+                : 'Pending';
 
-            let proofUrl = null;
-            if (expense.proofUri) {
-                proofUrl = expense.proofUri;
-            }
-
-            return `
-            <div class="category-item">
-                <div class="category-info">
-                <strong class="category-name">Category: ${expense.category || 'Uncategorized'}</strong>
-                <span class="category-amount">${amount}</span>
-                </div>
-                <div class="category-details">
-                <span class="${statusClass}">${statusText}</span>
-                ${proofUrl
-                    ? `<button class="view-receipt" data-receipt-url="${proofUrl}" data-expense-id="${expense.id}">
-                        View Receipt
-                    </button>`
-                    : '<span class="no-receipt">No Receipt</span>'
+                let proofUrl = null;
+                if (expense.proofUri) {
+                    proofUrl = expense.proofUri;
                 }
+
+                return `
+                <div class="category-item">
+                    <div class="category-info">
+                    <strong class="category-name">Category: ${expense.category || 'Uncategorized'}</strong>
+                    <span class="category-amount">${amount}</span>
+                    </div>
+                    <div class="category-details">
+                    <span class="${statusClass}">${statusText}</span>
+                    ${proofUrl
+                        ? `<button class="view-receipt" data-receipt-url="${proofUrl}" data-expense-id="${expense.id}">
+                            View Receipt
+                        </button>`
+                        : '<span class="no-receipt">No Receipt</span>'
+                    }
+                    </div>
                 </div>
-            </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
+        }
+        
+        modal.style.display = "flex";
     }
-    
-    modal.style.display = "flex";
-}
 
     viewReceipt(expenseId) {
         let foundExpense = null;

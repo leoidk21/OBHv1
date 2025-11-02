@@ -5,7 +5,184 @@ console.log("- window.electronAPI:", window.electronAPI ? "EXISTS" : "MISSING");
 console.log("- window.supabase:", window.supabase ? "EXISTS" : "MISSING");
 console.log("- window.supabaseConfig:", window.supabaseConfig ? "EXISTS" : "MISSING");
 
-// Global Supabase client variable
+// ============================================
+// ADMIN LOGGER UTILITY (GLOBALLY ACCESSIBLE)
+// ============================================
+const AdminLogger = {
+    API_BASE: "https://vxukqznjkdtuytnkhldu.supabase.co/rest/v1",
+    SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4dWtxem5qa2R0dXl0bmtobGR1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTI0NDE4MCwiZXhwIjoyMDc2ODIwMTgwfQ.7hCf7BDqlVuNkzP1CcbORilAzMqOHhexP4Y7bsTPRJA",
+
+    /**
+     * Get current admin ID from session
+     */
+     async getCurrentAdminId() {
+        try {
+            console.log("🔍 DEBUG - Getting current admin ID...");
+            
+            // Method 1: Try to get from Supabase session
+            if (window.supabase && window.supabase.auth) {
+                const { data: { session }, error } = await window.supabase.auth.getSession();
+                if (error) {
+                    console.error("❌ Supabase session error:", error);
+                } else if (session?.user?.id) {
+                    console.log("✅ Got admin ID from Supabase session:", session.user.id);
+                    return session.user.id;
+                } else {
+                    console.log("❌ No Supabase session found");
+                }
+            }
+
+            // Method 2: Try localStorage (check multiple possible keys)
+            const adminData = localStorage.getItem("adminData");
+            if (adminData) {
+                try {
+                    const admin = JSON.parse(adminData);
+                    console.log("✅ Got admin ID from localStorage:", admin.id);
+                    return admin.id;
+                } catch (e) {
+                    console.error("❌ Error parsing adminData:", e);
+                }
+            }
+
+            // Method 3: Check for direct ID in localStorage
+            const directAdminId = localStorage.getItem("adminId");
+            if (directAdminId) {
+                console.log("✅ Got admin ID from direct localStorage:", directAdminId);
+                return directAdminId;
+            }
+
+            // Method 4: Try to get from admin_profiles table using email
+            const adminEmail = localStorage.getItem("adminEmail") || 
+                             JSON.parse(localStorage.getItem("adminData") || "{}").email;
+            
+            if (adminEmail) {
+                console.log("🔍 Looking up admin ID by email:", adminEmail);
+                const adminId = await this.lookupAdminIdByEmail(adminEmail);
+                if (adminId) {
+                    console.log("✅ Found admin ID by email lookup:", adminId);
+                    return adminId;
+                }
+            }
+
+            console.warn("⚠️ No admin ID found - logging will fail");
+            return null;
+        } catch (error) {
+            console.error("❌ Error getting admin ID:", error);
+            return null;
+        }
+    },
+
+     async lookupAdminIdByEmail(email) {
+        try {
+            const response = await fetch(
+                `${this.API_BASE}/admin_profiles?email=eq.${encodeURIComponent(email)}&select=id`,
+                {
+                    headers: {
+                        'apikey': this.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    return data[0].id;
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error("Error looking up admin ID by email:", error);
+            return null;
+        }
+    },
+
+    /**
+     * Log admin action to database
+     */
+     async logAction(action, targetPage, details = {}) {
+        try {
+            console.log(`📝 Attempting to log action: ${action} on ${targetPage}`, details);
+            
+            const adminId = await this.getCurrentAdminId();
+            
+            if (!adminId) {
+                console.warn("⚠️ Cannot log action: No admin ID found");
+                // Try to get admin info for debugging
+                const adminData = localStorage.getItem("adminData");
+                console.log("🔍 Current localStorage adminData:", adminData);
+                return { success: false, error: "No admin ID" };
+            }
+
+            const logEntry = {
+                admin_id: adminId,
+                action: action,
+                target_page: targetPage,
+                details: details,
+                timestamp: new Date().toISOString()
+            };
+
+            console.log("📝 Log entry to be saved:", logEntry);
+
+            const response = await fetch(`${this.API_BASE}/admin_logs`, {
+                method: "POST",
+                headers: {
+                    'apikey': this.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${this.SUPABASE_ANON_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation"
+                },
+                body: JSON.stringify([logEntry])
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("❌ Failed to save log to database:", errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log("✅ Admin action logged successfully:", data);
+            return { success: true, data };
+
+        } catch (error) {
+            console.error("❌ Failed to log admin action:", error);
+            // Store locally as fallback
+            this.storeLogLocally(action, targetPage, details);
+            return { success: false, error: error.message };
+        }
+    },
+
+    /**
+     * Store log locally as fallback
+    */
+    storeLogLocally(action, targetPage, details) {
+        try {
+            const logs = JSON.parse(localStorage.getItem('pending_admin_logs') || '[]');
+            const logEntry = {
+                action,
+                targetPage,
+                details,
+                timestamp: new Date().toISOString(),
+                admin_id: localStorage.getItem("adminData") ? JSON.parse(localStorage.getItem("adminData")).id : 'unknown'
+            };
+            logs.push(logEntry);
+            localStorage.setItem('pending_admin_logs', JSON.stringify(logs));
+            console.log("💾 Log stored locally for later sync:", logEntry);
+        } catch (error) {
+            console.error("Failed to store log locally:", error);
+        }
+    }
+};
+
+// Make AdminLogger globally accessible
+window.AdminLogger = AdminLogger;
+console.log("✅ AdminLogger is now globally available");
+
+// ============================================
+// GLOBAL SUPABASE CLIENT VARIABLE
+// ============================================
 let supabase = null;
 
 // Add CSS styles
@@ -246,6 +423,8 @@ function getSupabase() {
   return null;
 }
 
+// ... [REST OF YOUR SUPERADMIN.JS CODE REMAINS THE SAME] ...
+
 /**
  * Check authentication status
  */
@@ -395,15 +574,61 @@ function updateUserUI(user) {
  */
 async function loadLogs(page = 1, limit = 20) {
     try {
-        console.log("📊 Loading admin logs...");
+        console.log("📊 Loading admin logs (page " + page + ")...");
         
+        // DEBUG: First check what's actually in admin_logs table
+        const { data: rawLogs, error: rawError } = await supabase
+            .from('admin_logs')
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(10);
+
+        if (rawError) {
+            console.error("❌ Error loading raw logs:", rawError);
+        } else {
+            console.log("🔍 RAW LOGS FROM DATABASE:", rawLogs);
+            
+            // Check if admin_id values exist in admin_profiles
+            if (rawLogs && rawLogs.length > 0) {
+                const adminIds = [...new Set(rawLogs.map(log => log.admin_id))];
+                console.log("🔍 Unique admin_ids in logs:", adminIds);
+                
+                // Verify these admin_ids exist in admin_profiles
+                const { data: existingAdmins, error: adminError } = await supabase
+                    .from('admin_profiles')
+                    .select('id, email, first_name, last_name')
+                    .in('id', adminIds);
+                
+                if (adminError) {
+                    console.error("❌ Error checking admin profiles:", adminError);
+                } else {
+                    console.log("✅ Admin profiles that exist:", existingAdmins);
+                    const existingAdminIds = existingAdmins.map(admin => admin.id);
+                    const missingAdminIds = adminIds.filter(id => !existingAdminIds.includes(id));
+                    
+                    if (missingAdminIds.length > 0) {
+                        console.error("❌ MISSING ADMIN PROFILES FOR IDs:", missingAdminIds);
+                    }
+                }
+            }
+        }
+
+        // Get filter values
         const adminFilter = document.getElementById("filterAdmin")?.value;
         const pageFilter = document.getElementById("filterPage")?.value;
         const dateFrom = document.getElementById("filterDateFrom")?.value;
         const dateTo = document.getElementById("filterDateTo")?.value;
         const actionFilter = document.getElementById("filterAction")?.value;
 
-        // Build query
+        console.log("🔍 Active filters:", {
+            admin: adminFilter || 'None',
+            page: pageFilter || 'None',
+            action: actionFilter || 'None',
+            dateFrom: dateFrom || 'None',
+            dateTo: dateTo || 'None'
+        });
+
+        // Build query - FIXED JOIN
         let query = supabase
             .from('admin_logs')
             .select(`
@@ -412,9 +637,8 @@ async function loadLogs(page = 1, limit = 20) {
                 action,
                 target_page,
                 details,
-                ip_address,
                 timestamp,
-                admin_profiles!fk_admin_logs_admin_profiles (
+                admin_profiles (
                     first_name,
                     last_name,
                     email,
@@ -424,19 +648,28 @@ async function loadLogs(page = 1, limit = 20) {
             .order('timestamp', { ascending: false });
 
         // Apply filters
-        if (adminFilter) {
+        if (adminFilter && adminFilter !== '') {
+            console.log("✅ Applying admin filter:", adminFilter);
             query = query.eq('admin_id', adminFilter);
         }
-        if (pageFilter) {
+        
+        if (pageFilter && pageFilter !== '') {
+            console.log("✅ Applying page filter:", pageFilter);
             query = query.eq('target_page', pageFilter);
         }
-        if (actionFilter) {
+        
+        if (actionFilter && actionFilter !== '') {
+            console.log("✅ Applying action filter:", actionFilter);
             query = query.eq('action', actionFilter);
         }
-        if (dateFrom) {
+        
+        if (dateFrom && dateFrom !== '') {
+            console.log("✅ Applying date from filter:", dateFrom);
             query = query.gte('timestamp', `${dateFrom}T00:00:00Z`);
         }
-        if (dateTo) {
+        
+        if (dateTo && dateTo !== '') {
+            console.log("✅ Applying date to filter:", dateTo);
             query = query.lte('timestamp', `${dateTo}T23:59:59Z`);
         }
 
@@ -448,11 +681,16 @@ async function loadLogs(page = 1, limit = 20) {
         const { data: logs, error, count } = await query;
 
         if (error) {
-            console.error("❌ Error loading logs:", error);
-            throw error;
+            console.error("❌ Error loading logs with join:", error);
+            
+            // Fallback: Load without join
+            console.log("🔄 Trying fallback query without join...");
+            return await loadLogsWithoutJoin(page, limit);
         }
 
         console.log(`✅ Loaded ${logs?.length || 0} logs (Total: ${count})`);
+        console.log("📋 Logs with admin profiles:", logs);
+        
         displayLogs(logs || []);
         updateLogsPagination(page, Math.ceil(count / limit), count);
         
@@ -462,7 +700,7 @@ async function loadLogs(page = 1, limit = 20) {
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" style="text-align: center; color: red;">
+                    <td colspan="6" style="text-align: center; color: red;">
                         Error loading logs: ${error.message}
                         <br>
                         <button onclick="loadLogs()" style="margin-top: 10px;">Retry</button>
@@ -471,6 +709,67 @@ async function loadLogs(page = 1, limit = 20) {
             `;
         }
     }
+}
+
+async function loadLogsWithoutJoin(page = 1, limit = 20) {
+    try {
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+
+        const { data: logs, error, count } = await supabase
+            .from('admin_logs')
+            .select('*', { count: 'exact' })
+            .order('timestamp', { ascending: false })
+            .range(from, to);
+
+        if (error) throw error;
+
+        console.log(`✅ Loaded ${logs?.length || 0} logs without join`);
+        
+        // Manually enrich with admin data
+        const enrichedLogs = await enrichLogsWithAdminData(logs || []);
+        displayLogs(enrichedLogs);
+        updateLogsPagination(page, Math.ceil(count / limit), count);
+        
+    } catch (error) {
+        console.error("❌ Error in fallback load:", error);
+        throw error;
+    }
+}
+
+/**
+ * Manually enrich logs with admin data
+ */
+async function enrichLogsWithAdminData(logs) {
+    if (!logs || logs.length === 0) return logs;
+
+    // Get unique admin IDs
+    const adminIds = [...new Set(logs.map(log => log.admin_id).filter(Boolean))];
+    
+    if (adminIds.length === 0) return logs;
+
+    // Fetch admin profiles
+    const { data: admins, error } = await supabase
+        .from('admin_profiles')
+        .select('id, first_name, last_name, email, role')
+        .in('id', adminIds);
+
+    if (error) {
+        console.error("❌ Error fetching admin profiles:", error);
+        return logs; // Return original logs if we can't get admin data
+    }
+
+    // Create a map for quick lookup
+    const adminMap = {};
+    admins.forEach(admin => {
+        adminMap[admin.id] = admin;
+    });
+
+    // Enrich logs with admin data
+    return logs.map(log => ({
+        ...log,
+        admin_profiles: adminMap[log.admin_id] || null
+    }));
 }
 
 /**
@@ -584,11 +883,9 @@ function displayLogs(logs) {
                 <td>${timestamp}</td>
                 <td>
                     <div>${adminName}</div>
-                    <small class="role-badge ${roleClass}">${adminRole}</small>
                 </td>
                 <td><span class="action-badge action-${log.action?.toLowerCase() || 'unknown'}">${actionText}</span></td>
                 <td>${log.target_page || 'N/A'}</td>
-                <td>${log.ip_address || 'N/A'}</td>
                 <td title="${eventDetails.replace(/"/g, '&quot;')}">
                     ${eventDetails.substring(0, 50)}${eventDetails.length > 50 ? '...' : ''}
                 </td>
@@ -664,10 +961,6 @@ async function viewLogDetails(logId) {
                             <span>${log.target_page || 'N/A'}</span>
                         </div>
                         <div class="detail-row">
-                            <label>IP Address:</label>
-                            <span>${log.ip_address || 'N/A'}</span>
-                        </div>
-                        <div class="detail-row">
                             <label>Event Details:</label>
                             <div style="flex: 1;">
                                 <pre class="log-details-json">${formattedDetails}</pre>
@@ -723,70 +1016,209 @@ function updateLogsPagination(currentPage, totalPages, totalItems) {
     paginationEl.innerHTML = paginationHTML;
 }
 
-function setupLogsFilters() {
-    // Admin filter
-    const adminFilter = document.getElementById('filterAdmin');
-    if (adminFilter) {
-        adminFilter.addEventListener('change', () => loadLogs(1));
-    }
-
-    // Page filter
-    const pageFilter = document.getElementById('filterPage');
-    if (pageFilter) {
-        pageFilter.addEventListener('change', () => loadLogs(1));
-    }
-
-    // Action filter - Updated with new action types
-    const actionFilter = document.getElementById('filterAction');
-    if (actionFilter) {
-        // Populate action filter with event-related actions
-        const actions = [
-            { value: '', text: 'All Actions' },
-            { value: 'approve', text: 'Approves Event' },
-            { value: 'reject', text: 'Rejects Event' },
-            { value: 'reminder', text: 'Sends Reminder' },
-            { value: 'create', text: 'Creates Event' },
-            { value: 'update', text: 'Updates Event' },
-            { value: 'delete', text: 'Deletes Event' },
-            { value: 'login', text: 'Login' },
-            { value: 'logout', text: 'Logout' }
-        ];
-        
-        actionFilter.innerHTML = actions.map(action => 
-            `<option value="${action.value}">${action.text}</option>`
-        ).join('');
-        
-        actionFilter.addEventListener('change', () => loadLogs(1));
-    }
-
-    // Date filters
-    const dateFrom = document.getElementById('filterDateFrom');
-    const dateTo = document.getElementById('filterDateTo');
+async function setupLogsFilters() {
+    console.log("🔧 Setting up logs filters...");
     
-    if (dateFrom) {
-        dateFrom.addEventListener('change', () => loadLogs(1));
-    }
-    if (dateTo) {
-        dateTo.addEventListener('change', () => loadLogs(1));
-    }
+    try {
+        // 1. POPULATE ADMIN FILTER DROPDOWN
+        await populateAdminFilter();
+        
+        // 2. Admin filter
+        const adminFilter = document.getElementById('filterAdmin');
+        if (adminFilter) {
+            adminFilter.addEventListener('change', () => {
+                console.log("Admin filter changed:", adminFilter.value);
+                loadLogs(1);
+            });
+            console.log("✅ Admin filter setup complete");
+        } else {
+            console.warn("⚠️ filterAdmin element not found (might be in different tab)");
+        }
 
-    // Reset filters
-    const resetFilters = document.getElementById('resetFilters');
-    if (resetFilters) {
-        resetFilters.addEventListener('click', () => {
-            document.getElementById('filterAdmin').value = '';
-            document.getElementById('filterPage').value = '';
-            document.getElementById('filterAction').value = '';
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
-            loadLogs(1);
-        });
-    }
+        // 3. Page filter
+        const pageFilter = document.getElementById('filterPage');
+        if (pageFilter) {
+            // Populate page filter with actual pages from logs
+            populatePageFilter();
+            
+            pageFilter.addEventListener('change', () => {
+                console.log("Page filter changed:", pageFilter.value);
+                loadLogs(1);
+            });
+            console.log("✅ Page filter setup complete");
+        } else {
+            console.warn("⚠️ filterPage element not found (might be in different tab)");
+        }
 
-    // Export logs
-    const exportLogs = document.getElementById('exportLogs');
-    if (exportLogs) {
-        exportLogs.addEventListener('click', exportLogsToCSV);
+        // 4. Action filter - Updated with new action types
+        const actionFilter = document.getElementById('filterAction');
+        if (actionFilter) {
+            const actions = [
+                { value: '', text: 'All Actions' },
+                { value: 'approve', text: 'Approves Event' },
+                { value: 'reject', text: 'Rejects Event' },
+                { value: 'reminder', text: 'Sends Reminder' },
+                { value: 'create', text: 'Creates Event' },
+                { value: 'update', text: 'Updates Event' },
+                { value: 'delete', text: 'Deletes Event' },
+                { value: 'login', text: 'Login' },
+                { value: 'logout', text: 'Logout' },
+                { value: 'view_logs', text: 'View Logs' },
+                { value: 'view_admins', text: 'View Admins' }
+            ];
+            
+            actionFilter.innerHTML = actions.map(action => 
+                `<option value="${action.value}">${action.text}</option>`
+            ).join('');
+            
+            actionFilter.addEventListener('change', () => {
+                console.log("Action filter changed:", actionFilter.value);
+                loadLogs(1);
+            });
+            console.log("✅ Action filter setup complete");
+        } else {
+            console.warn("⚠️ filterAction element not found (might be in different tab)");
+        }
+
+        // 5. Date filters
+        const dateFrom = document.getElementById('filterDateFrom');
+        const dateTo = document.getElementById('filterDateTo');
+        
+        if (dateFrom) {
+            dateFrom.addEventListener('change', () => {
+                console.log("Date from changed:", dateFrom.value);
+                loadLogs(1);
+            });
+            console.log("✅ Date from filter setup complete");
+        } else {
+            console.warn("⚠️ filterDateFrom element not found (might be in different tab)");
+        }
+        
+        if (dateTo) {
+            dateTo.addEventListener('change', () => {
+                console.log("Date to changed:", dateTo.value);
+                loadLogs(1);
+            });
+            console.log("✅ Date to filter setup complete");
+        } else {
+            console.warn("⚠️ filterDateTo element not found (might be in different tab)");
+        }
+
+        // 6. Reset filters button
+        const resetFilters = document.getElementById('resetFilters');
+        if (resetFilters) {
+            resetFilters.addEventListener('click', () => {
+                console.log("🔄 Resetting all filters");
+                
+                if (adminFilter) adminFilter.value = '';
+                if (pageFilter) pageFilter.value = '';
+                if (actionFilter) actionFilter.value = '';
+                if (dateFrom) dateFrom.value = '';
+                if (dateTo) dateTo.value = '';
+                
+                loadLogs(1);
+            });
+            console.log("✅ Reset filters button setup complete");
+        } else {
+            console.warn("⚠️ resetFilters button not found (might be in different tab)");
+        }
+
+        // 7. Export logs button
+        const exportLogs = document.getElementById('exportLogs');
+        if (exportLogs) {
+            exportLogs.addEventListener('click', exportLogsToCSV);
+            console.log("✅ Export logs button setup complete");
+        } else {
+            console.warn("⚠️ exportLogs button not found (might be in different tab)");
+        }
+        
+        console.log("✅ Filters setup complete");
+    } catch (error) {
+        console.error("❌ Error setting up filters:", error);
+    }
+}
+
+async function populateAdminFilter() {
+    try {
+        console.log("📊 Loading admins for filter dropdown...");
+        
+        const adminFilter = document.getElementById('filterAdmin');
+        if (!adminFilter) {
+            console.error("❌ Admin filter dropdown not found!");
+            return;
+        }
+
+        // Fetch all admins
+        const { data: admins, error } = await supabase
+            .from('admin_profiles')
+            .select('id, first_name, last_name, email, role')
+            .order('first_name', { ascending: true });
+
+        if (error) {
+            console.error("❌ Error loading admins for filter:", error);
+            throw error;
+        }
+
+        console.log(`✅ Loaded ${admins?.length || 0} admins for filter`);
+
+        // Build dropdown options
+        let options = '<option value="">All Admins</option>';
+        
+        if (admins && admins.length > 0) {
+            options += admins.map(admin => {
+                const fullName = `${admin.first_name} ${admin.last_name}`;
+                const roleLabel = admin.role?.includes('super') ? ' (Super Admin)' : ' (Admin)';
+                return `<option value="${admin.id}">${fullName}${roleLabel}</option>`;
+            }).join('');
+        }
+
+        adminFilter.innerHTML = options;
+        console.log("✅ Admin filter populated successfully");
+
+    } catch (error) {
+        console.error("❌ Failed to populate admin filter:", error);
+        const adminFilter = document.getElementById('filterAdmin');
+        if (adminFilter) {
+            adminFilter.innerHTML = '<option value="">All Admins (Error loading)</option>';
+        }
+    }
+}
+
+async function populatePageFilter() {
+    try {
+        console.log("📊 Loading pages for filter dropdown...");
+        
+        const pageFilter = document.getElementById('filterPage');
+        if (!pageFilter) return;
+
+        // Get unique pages from logs
+        const { data: logs, error } = await supabase
+            .from('admin_logs')
+            .select('target_page');
+
+        if (error) throw error;
+
+        // Extract unique pages
+        const uniquePages = [...new Set(logs?.map(log => log.target_page).filter(Boolean))];
+        uniquePages.sort();
+
+        console.log(`✅ Found ${uniquePages.length} unique pages`);
+
+        // Build dropdown options
+        let options = '<option value="">All Pages</option>';
+        options += uniquePages.map(page => 
+            `<option value="${page}">${page}</option>`
+        ).join('');
+
+        pageFilter.innerHTML = options;
+        console.log("✅ Page filter populated successfully");
+
+    } catch (error) {
+        console.error("❌ Failed to populate page filter:", error);
+        const pageFilter = document.getElementById('filterPage');
+        if (pageFilter) {
+            pageFilter.innerHTML = '<option value="">All Pages (Error loading)</option>';
+        }
     }
 }
 
@@ -798,7 +1230,6 @@ async function exportLogsToCSV() {
                 timestamp,
                 action,
                 target_page,
-                ip_address,
                 details,
                 admin_profiles!fk_admin_logs_admin_profiles (
                     first_name,
@@ -811,7 +1242,7 @@ async function exportLogsToCSV() {
 
         if (error) throw error;
 
-        const csvHeaders = ['Timestamp', 'Admin Name', 'Admin Email', 'Role', 'Action', 'Page', 'IP Address', 'Event Details'];
+        const csvHeaders = ['Timestamp', 'Admin Name', 'Admin Email', 'Role', 'Action', 'Page', 'Event Details'];
         const csvRows = logs.map(log => [
             new Date(log.timestamp).toLocaleString(),
             log.admin_profiles ? `${log.admin_profiles.first_name} ${log.admin_profiles.last_name}` : 'Unknown',
@@ -819,7 +1250,6 @@ async function exportLogsToCSV() {
             log.admin_profiles?.role || 'Unknown',
             formatActionText(log.action, log.details),
             log.target_page || 'N/A',
-            log.ip_address || 'N/A',
             formatEventDetails(log.details)
         ]);
 
@@ -1036,7 +1466,7 @@ function setupLogout() {
  */
 function setupTabs() {
     document.querySelectorAll(".menu-item[data-tab]").forEach((item) => {
-        item.addEventListener("click", (e) => {
+        item.addEventListener("click", async (e) => {
             e.preventDefault();
             const tabName = item.dataset.tab;
 
@@ -1066,8 +1496,9 @@ function setupTabs() {
 
             // Load data for specific tabs
             if (tabName === "logs") {
-                loadLogs();
-                setupLogsFilters(); // Setup filters when logs tab is opened
+                await loadLogs();
+                // Re-setup filters when logs tab is opened (elements should now exist)
+                await setupLogsFilters();
             }
             if (tabName === "admins") loadAdmins();
 
@@ -1080,7 +1511,6 @@ function setupTabs() {
         });
     });
 }
-
 /**
  * Initialize Super Admin Dashboard
  */
@@ -1113,6 +1543,9 @@ async function initializeSuperAdmin() {
         // Setup UI interactions
         setupLogout();
         setupTabs();
+        
+        // ⚠️ IMPORTANT: Setup filters AFTER loading logs
+        await setupLogsFilters();
         
         console.log("🎉 Super Admin initialized successfully!");
         
