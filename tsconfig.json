@@ -1,0 +1,14 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-jsx",
+    "types": ["react", "react-native"],
+    "typeRoots": ["./@types", "./node_modules/@types"],
+    "paths": {
+      "@env": ["./@types/env.d.ts"]
+    },
+    "lib": ["esnext"],
+    "skipLibCheck": true
+  }
+}

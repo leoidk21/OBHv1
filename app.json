@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Orchestrated By HIStory Event Planner",
+    "slug": "Mobile",
+    "scheme": "com.orchestratedbyhistory.eventplanner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/LOGO.jpg",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./src/assets/LOGO.jpg",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.orchestratedbyhistory.eventplanner",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.orchestratedbyhistory.eventplanner",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/LOGO.jpg",
+        "backgroundColor": "#ffffff"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.orchestratedbyhistory.eventplanner"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./src/assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-asset",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ad2cb415-12fc-442c-ad81-39f87fa59cf0"
+      }
+    }
+  }
+}
